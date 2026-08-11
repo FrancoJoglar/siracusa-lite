@@ -1,5 +1,7 @@
 {
   "outputDirectory": "public",
+  "installCommand": "npm install",
+  "buildCommand": "echo done",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
