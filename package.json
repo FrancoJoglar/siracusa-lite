@@ -1,0 +1,11 @@
+{
+  "name": "siracusa-lite",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0"
+  }
+}

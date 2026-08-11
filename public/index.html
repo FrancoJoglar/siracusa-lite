@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Siracusa — Gestión de Riegos</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fade-in{animation:fadeIn .25s ease-in}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .cell-click{cursor:pointer;transition:all .12s}
+    .cell-click:hover{background:#dbeafe!important}
+    .cell-today{box-shadow:inset 0 0 0 2px #2563eb}
+    .cal-scroll::-webkit-scrollbar{height:8px}
+    .cal-scroll::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+    .cal-scroll::-webkit-scrollbar-track{background:#f1f5f9}
+    .over-max{background:#fef2f2!important;color:#dc2626!important}
+    .saldo-ok{color:#16a34a}.saldo-warn{color:#d97706}.saldo-over{color:#dc2626;font-weight:bold}
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <nav class="bg-white shadow-sm border-b sticky top-0 z-50">
+    <div class="max-w-[1600px] mx-auto px-4 flex items-center h-14">
+      <span class="text-xl font-bold text-green-700 mr-8">🌾 Siracusa</span>
+      <div class="flex gap-1">
+        <button onclick="showView('calendario')" class="nav-btn px-3 py-1.5 rounded-lg text-sm font-medium" data-view="calendario">📅 Calendario</button>
+        <button onclick="showView('solicitudes')" class="nav-btn px-3 py-1.5 rounded-lg text-sm font-medium" data-view="solicitudes">📝 Nueva Solicitud</button>
+        <button onclick="showView('recetas')" class="nav-btn px-3 py-1.5 rounded-lg text-sm font-medium" data-view="recetas">🧪 Recetas</button>
+        <button onclick="showView('database')" class="nav-btn px-3 py-1.5 rounded-lg text-sm font-medium" data-view="database">📊 Base de Datos</button>
+        <button onclick="showView('export')" class="nav-btn px-3 py-1.5 rounded-lg text-sm font-medium" data-view="export">📥 Exportar</button>
+      </div>
+    </div>
+  </nav>
+  <main class="max-w-[1600px] mx-auto px-4 py-6">
+
+    <!-- ═══ CALENDARIO ═══ -->
+    <div id="view-calendario" class="view fade-in">
+      <div class="flex flex-wrap items-end gap-4 mb-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Equipo</label>
+          <select id="cal-equipo" class="border rounded-lg px-3 py-2 text-sm font-medium" onchange="loadCalendar()"><option value="">Seleccionar equipo...</option></select></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Mes</label>
+          <select id="cal-mes" class="border rounded-lg px-3 py-2 text-sm" onchange="loadCalendar()">
+            <option value="1">Ene</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Abr</option>
+            <option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Ago</option>
+            <option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12">Dic</option>
+          </select></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Año</label>
+          <select id="cal-anio" class="border rounded-lg px-3 py-2 text-sm" onchange="loadCalendar()">
+            <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
+          </select></div>
+      </div>
+      <div id="cal-stats" class="flex flex-wrap gap-3 mb-4 hidden">
+        <span class="bg-white border rounded-lg px-3 py-1 text-sm">📅 <strong id="cal-dias">0</strong> días</span>
+        <span class="bg-white border rounded-lg px-3 py-1 text-sm">⏱ <strong id="cal-hrs">0</strong> hrs</span>
+        <span class="bg-white border rounded-lg px-3 py-1 text-sm">💧 <strong id="cal-m3">0</strong> m³</span>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div id="cal-empty" class="text-center py-12 text-gray-400"><p class="text-lg">📅 Elegí un equipo</p></div>
+        <div id="cal-grid" class="hidden cal-scroll overflow-x-auto"><table class="border-collapse text-xs" id="cal-table"></table></div>
+      </div>
+    </div>
+
+    <!-- ═══ NUEVA SOLICITUD ═══ -->
+    <div id="view-solicitudes" class="view hidden fade-in">
+      <h1 class="text-2xl font-bold text-gray-800 mb-6">Nueva Solicitud de Riego</h1>
+      <form id="form-sol" class="bg-white rounded-xl shadow-sm p-6 border">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Fecha</label><input type="date" id="s-fecha" required class="w-full border rounded-lg px-3 py-2"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Equipo</label><select id="s-equipo" required class="w-full border rounded-lg px-3 py-2"><option value="">Seleccionar...</option></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Sector</label><select id="s-sector" required class="w-full border rounded-lg px-3 py-2"><option value="">Elegí equipo primero</option></select></div>
+        </div>
+        <div id="s-sec-info" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm"></div>
+        <div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-1">Horas</label><input type="number" step="0.5" min="0" max="24" required id="s-horas" class="w-48 border rounded-lg px-3 py-2 text-lg font-semibold" placeholder="5.0"></div>
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">🧪 Fertilizantes (kg)</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="s-ferts"></div>
+        <div id="s-receta-warn" class="hidden bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-4 text-sm"></div>
+        <div id="s-m3" class="hidden bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Solicitante</label><input type="text" id="s-sol" required class="w-full border rounded-lg px-3 py-2" placeholder="Nombre"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Observaciones</label><input type="text" id="s-obs" class="w-full border rounded-lg px-3 py-2" placeholder="Opcional"></div>
+        </div>
+        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg">✅ Registrar</button>
+      </form>
+    </div>
+
+    <!-- ═══ RECETAS ═══ -->
+    <div id="view-recetas" class="view hidden fade-in">
+      <h1 class="text-2xl font-bold text-gray-800 mb-6">🧪 Recetas de Fertilización</h1>
+      <div class="bg-white rounded-xl shadow-sm p-6 border">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Equipo</label>
+            <select id="r-equipo" class="w-full border rounded-lg px-3 py-2" onchange="onRecetaEquipoChange()"><option value="">Seleccionar...</option></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Sector</label>
+            <select id="r-sector" class="w-full border rounded-lg px-3 py-2"><option value="">Elegí equipo</option></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Mes</label>
+            <select id="r-mes" class="w-full border rounded-lg px-3 py-2"><option value="1">Ene</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Abr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Ago</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12">Dic</option></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Año</label>
+            <select id="r-anio" class="w-full border rounded-lg px-3 py-2"><option value="2025">2025</option><option value="2026" selected>2026</option></select></div>
+        </div>
+        <button onclick="loadRecetas()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium mb-4">🔍 Cargar Receta</button>
+        <div id="r-form" class="hidden">
+          <div class="bg-gray-50 rounded-lg p-4 mb-4">
+            <h3 class="font-semibold text-gray-700 mb-3">Kilos Máximos por Mes</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="r-inputs"></div>
+          </div>
+          <div id="r-nutrients" class="bg-blue-50 rounded-lg p-3 mb-4 text-sm hidden"></div>
+          <button onclick="saveRecetas()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium">💾 Guardar Receta</button>
+        </div>
+        <div id="r-empty" class="text-center py-6 text-gray-400 hidden">Seleccioná un sector para cargar su receta</div>
+      </div>
+    </div>
+
+    <!-- ═══ BASE DE DATOS ═══ -->
+    <div id="view-database" class="view hidden fade-in">
+      <h1 class="text-2xl font-bold text-gray-800 mb-6">📊 Base de Datos</h1>
+      <div class="bg-white rounded-xl shadow-sm p-4 border mb-4">
+        <div class="flex flex-wrap gap-3 items-end">
+          <div><label class="block text-xs text-gray-500 mb-1">Desde</label><input type="date" id="f-desde" class="border rounded-lg px-3 py-1.5 text-sm"></div>
+          <div><label class="block text-xs text-gray-500 mb-1">Hasta</label><input type="date" id="f-hasta" class="border rounded-lg px-3 py-1.5 text-sm"></div>
+          <div><label class="block text-xs text-gray-500 mb-1">Equipo</label><select id="f-equipo" class="border rounded-lg px-3 py-1.5 text-sm"><option value="">Todos</option></select></div>
+          <button onclick="loadDatabase()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm">🔍 Filtrar</button>
+          <button onclick="clearDbFilters()" class="text-gray-500 hover:text-gray-700 px-3 py-1.5 text-sm">Limpiar</button>
+        </div>
+      </div>
+      <div id="db-stats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 hidden">
+        <div class="bg-white rounded-lg p-3 border text-center"><div class="text-2xl font-bold text-blue-600" id="st-n">0</div><div class="text-xs text-gray-500">Solicitudes</div></div>
+        <div class="bg-white rounded-lg p-3 border text-center"><div class="text-2xl font-bold text-green-600" id="st-h">0</div><div class="text-xs text-gray-500">Horas</div></div>
+        <div class="bg-white rounded-lg p-3 border text-center"><div class="text-2xl font-bold text-purple-600" id="st-m">0</div><div class="text-xs text-gray-500">M³</div></div>
+        <div class="bg-white rounded-lg p-3 border text-center"><div class="text-2xl font-bold text-orange-600" id="st-f">0</div><div class="text-xs text-gray-500">Fert kg</div></div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border overflow-x-auto">
+        <table class="w-full text-sm"><thead class="bg-gray-50 text-gray-600"><tr>
+          <th class="px-3 py-2 text-left">Fecha</th><th class="px-3 py-2 text-left">Equipo</th><th class="px-3 py-2 text-left">Sector</th>
+          <th class="px-3 py-2 text-right">Hrs</th><th class="px-3 py-2 text-right">M³</th><th class="px-3 py-2 text-right">S.Zn</th>
+          <th class="px-3 py-2 text-right">N.Amo</th><th class="px-3 py-2 text-right">N.Ca</th><th class="px-3 py-2 text-right">Cl.K</th>
+          <th class="px-3 py-2 text-left">Solicitante</th><th class="px-3 py-2 text-center"></th>
+        </tr></thead><tbody id="db-rows" class="divide-y divide-gray-100"></tbody></table>
+        <div id="db-empty" class="hidden text-center py-8 text-gray-400">Sin resultados</div>
+      </div>
+    </div>
+
+    <!-- ═══ EXPORTAR ═══ -->
+    <div id="view-export" class="view hidden fade-in">
+      <h1 class="text-2xl font-bold text-gray-800 mb-6">📥 Exportar para Agronic</h1>
+      <div class="bg-white rounded-xl shadow-sm p-6 border max-w-lg">
+        <p class="text-gray-600 mb-4">Seleccioná la fecha para descargar el listado CSV.</p>
+        <div class="flex gap-3 items-end mb-4">
+          <div class="flex-1"><label class="block text-sm font-medium text-gray-700 mb-1">Fecha</label><input type="date" id="exp-fecha" class="w-full border rounded-lg px-3 py-2"></div>
+          <button onclick="doExport()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium">📥 CSV</button>
+        </div>
+        <div id="exp-prev" class="hidden"><div class="bg-gray-50 rounded-lg p-3 text-xs font-mono overflow-auto" id="exp-tbl"></div><p class="text-sm text-gray-500 mt-2" id="exp-cnt"></p></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL: Fertilizantes (pantalla dedicada) -->
+  <div id="modal-fert" class="fixed inset-0 bg-gray-100 z-50 hidden overflow-y-auto">
+    <div id="fm-header" class="bg-white border-b px-6 py-4 sticky top-0 z-10"></div>
+    <div class="max-w-2xl mx-auto p-6">
+      <div class="mb-4 flex items-center justify-between">
+        <h3 class="font-semibold text-gray-700">Kilos por fertilizante</h3>
+        <span id="fm-total" class="text-sm font-bold text-green-700"></span>
+      </div>
+      <div id="fm-rows" class="space-y-2 mb-6"></div>
+      <div class="flex gap-2 justify-end sticky bottom-0 bg-gray-100 py-4">
+        <button onclick="closeModal('modal-fert')" class="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg">Cancelar</button>
+        <button onclick="saveFertModal()" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium">💾 Guardar Fertilizantes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add solicitud (solo horas) -->
+  <div id="modal-add" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl p-6 max-w-md mx-4 shadow-xl w-full">
+      <h3 class="text-lg font-semibold mb-1">Nueva Solicitud</h3>
+      <p class="text-sm text-gray-500 mb-4" id="ma-ctx"></p>
+      <form id="ma-form">
+        <input type="hidden" id="ma-fecha"><input type="hidden" id="ma-sector">
+        <div class="mb-3"><label class="block text-sm font-medium text-gray-700 mb-1">Horas</label><input type="number" step="0.5" min="0" max="24" required id="ma-horas" class="w-full border rounded-lg px-3 py-2 text-lg font-semibold" placeholder="5.0"></div>
+        <div class="mb-3"><label class="block text-sm font-medium text-gray-700 mb-1">Solicitante</label><input type="text" required id="ma-sol" class="w-full border rounded-lg px-3 py-2" placeholder="Nombre"></div>
+        <p class="text-xs text-gray-400 mb-3">Los fertilizantes se agregan después haciendo click en 🧪 en el calendario.</p>
+        <div class="flex gap-2 justify-end">
+          <button type="button" onclick="closeModal('modal-add')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium">✅ Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: View solicitud -->
+  <div id="modal-view" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl p-6 max-w-md mx-4 shadow-xl w-full">
+      <h3 class="text-lg font-semibold mb-3">Detalle del Riego</h3>
+      <div id="mv-content" class="text-sm space-y-2 mb-4"></div>
+      <div class="flex gap-2 justify-end">
+        <button onclick="closeModal('modal-view')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cerrar</button>
+        <button id="mv-del" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg">🗑 Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg hidden z-50"><span id="toast-t"></span></div>
+
+  <!-- JS Modules: api.js must load first (defines globals) -->
+  <script src="js/api.js"></script>
+  <script src="js/calendario.js"></script>
+  <script src="js/fertModal.js"></script>
+  <script src="js/solicitudes.js"></script>
+  <script src="js/database.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/mantenedores.js"></script>
+  <script>init();</script>
+</body>
+</html>
