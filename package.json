@@ -1,9 +1,9 @@
 {
   "name": "siracusa-lite",
   "version": "1.0.0",
-  "type": "module",
+  "private": true,
   "scripts": {
-    "dev": "node server.js"
+    "build": "echo 'static site, no build needed'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0"
