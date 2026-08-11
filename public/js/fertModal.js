@@ -3,7 +3,7 @@ async function openFertModalByDate(fecha,sectorId){
   console.log('🧪 openFertModalByDate called:', fecha, sectorId);
   
   // Fetch directo de la DB - siempre funciona
-  const solData = await api(`/api/solicitudes/buscar?fecha=${fecha}&id_sector=${sectorId}`);
+  const solData = await api(`/api/solicitudes?search=true&fecha=${fecha}&id_sector=${sectorId}`);
   console.log('🧪 solData:', solData);
   
   if(!solData){toast('No hay solicitud para '+fecha);return;}
@@ -77,7 +77,7 @@ async function saveFertModal(){
   if(!fertSolId)return;
   const data={};
   FN.forEach((n,i)=>{data[FK[i]]=parseFloat(document.getElementById('fm-'+i)?.value)||0;});
-  await api('/api/solicitudes/'+fertSolId+'/fertilizantes',{method:'PUT',body:data});
+  await api(`/api/solicitudes?id=${fertSolId}&action=fertilizantes`,{method:'PUT',body:data});
   closeModal('modal-fert');
   toast('✅ Fertilizantes guardados');
   loadCalendar();

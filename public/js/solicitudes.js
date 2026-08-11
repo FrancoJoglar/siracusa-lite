@@ -41,7 +41,7 @@ async function viewS(fecha,secId){
   document.getElementById('mv-content').innerHTML=h;
   document.getElementById('modal-view').classList.remove('hidden');
 }
-async function onDeleteView(){if(!viewSolId)return;await api('/api/solicitudes/'+viewSolId,{method:'DELETE'});closeModal('modal-view');toast('✅ Eliminado');loadCalendar();}
+async function onDeleteView(){if(!viewSolId)return;await api('/api/solicitudes?id='+viewSolId,{method:'DELETE'});closeModal('modal-view');toast('✅ Eliminado');loadCalendar();}
 // ═══ SOLICITUD FORM ═══
 let solReceta={};
 function onSecEquipo(){const eq=document.getElementById('s-equipo').value,sel=document.getElementById('s-sector');if(!eq){sel.innerHTML='<option value="">Elegí equipo</option>';return;}sel.innerHTML='<option value="">Seleccionar...</option>'+sectores.filter(s=>s.id_equipo==eq).map(s=>`<option value="${s.id}">${s.name} (${s.variedad||'N/A'})</option>`).join('');}
@@ -72,6 +72,6 @@ async function loadRecetas(){
 async function saveRecetas(){
   const sec=document.getElementById('r-sector').value,m=document.getElementById('r-mes').value,y=document.getElementById('r-anio').value;
   const ferts=FN.map((n,i)=>({id:fertilizantes.find(f=>f.name===n)?.id,kilos_maximo:parseFloat(document.getElementById('rf-'+i).value)||0})).filter(f=>f.id);
-  const res=await api('/api/recetas/bulk',{method:'POST',body:{id_sector:sec,mes:m,anio:y,fertilizantes:ferts}});
+  const res=await api('/api/recetas?bulk=true',{method:'POST',body:{id_sector:sec,mes:m,anio:y,fertilizantes:ferts}});
   toast('✅ Receta guardada ('+res.saved+' fertilizantes)');
 }
