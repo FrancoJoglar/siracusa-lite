@@ -3,3 +3,4 @@ siracusa.db*
 .env
 
 .vercel
+.env*

@@ -1,8 +1,13 @@
-import { supabase } from '../../lib/supabase.js';
+import { supabase } from '../lib/supabase.js';
+
+const FERT_MAX = 999;
+function clampFert(v) {
+  return Math.min(Math.max(parseFloat(v) || 0, 0), FERT_MAX);
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
@@ -10,6 +15,42 @@ export default async function handler(req, res) {
   }
 
   try {
+    // GET /api/solicitudes?search=true → buscar by fecha + id_sector
+    if (req.method === 'GET' && req.query.search === 'true') {
+      const { fecha, id_sector } = req.query;
+
+      if (!fecha || !id_sector) {
+        return res.status(200).json(null);
+      }
+
+      const { data, error } = await supabase
+        .schema('siracusa')
+        .from('solicitudes_riego')
+        .select('*, sectores!inner(name, id_equipo, has_hectareas, variedad, equipos!inner(name))')
+        .eq('fecha_riego', fecha)
+        .eq('id_sector', id_sector)
+        .eq('active', true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        return res.status(200).json(null);
+      }
+
+      const result = {
+        ...data,
+        sector_name: data.sectores?.name,
+        equipo_name: data.sectores?.equipos?.name,
+        has_hectareas: data.sectores?.has_hectareas,
+        variedad: data.sectores?.variedad,
+        sectores: undefined,
+      };
+
+      return res.status(200).json(result);
+    }
+
+    // GET /api/solicitudes → list
     if (req.method === 'GET') {
       const { fecha, fecha_desde, fecha_hasta, id_equipo } = req.query;
 
@@ -49,6 +90,7 @@ export default async function handler(req, res) {
       return res.status(200).json(result);
     }
 
+    // POST /api/solicitudes → create
     if (req.method === 'POST') {
       const {
         id_sector, fecha_riego, horas, hr_reales,
@@ -98,6 +140,46 @@ export default async function handler(req, res) {
 
       if (error) throw error;
       return res.status(201).json({ id: data.id, m3_programados });
+    }
+
+    const { id, action } = req.query;
+
+    // PUT /api/solicitudes?id=X&action=fertilizantes → update fertilizantes
+    if (req.method === 'PUT' && id && action === 'fertilizantes') {
+      const {
+        fert_sulfato_zn, fert_nitrato_amo, fert_nitrato_ca, fert_cloruro_k,
+        fert_acido_boro, fert_sulfato_mg, fert_fma, fert_urea,
+      } = req.body;
+
+      const { error } = await supabase
+        .schema('siracusa')
+        .from('solicitudes_riego')
+        .update({
+          fert_sulfato_zn: clampFert(fert_sulfato_zn),
+          fert_nitrato_amo: clampFert(fert_nitrato_amo),
+          fert_nitrato_ca: clampFert(fert_nitrato_ca),
+          fert_cloruro_k: clampFert(fert_cloruro_k),
+          fert_acido_boro: clampFert(fert_acido_boro),
+          fert_sulfato_mg: clampFert(fert_sulfato_mg),
+          fert_fma: clampFert(fert_fma),
+          fert_urea: clampFert(fert_urea),
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+      return res.status(200).json({ updated: true });
+    }
+
+    // DELETE /api/solicitudes?id=X → soft delete
+    if (req.method === 'DELETE' && id) {
+      const { error } = await supabase
+        .schema('siracusa')
+        .from('solicitudes_riego')
+        .update({ active: false })
+        .eq('id', id);
+
+      if (error) throw error;
+      return res.status(200).json({ deleted: true });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
