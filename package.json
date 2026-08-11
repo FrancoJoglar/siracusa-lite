@@ -2,10 +2,6 @@
   "name": "siracusa-lite",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "build": "echo 'static site, no build needed'"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.49.0"
-  }
+  "build": "echo 'ok'",
+  "installCommand": "npm install --omit=dev"
 }
