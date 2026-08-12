@@ -1,10 +1,71 @@
 // ═══ API Helper & Global State ═══
 let equipos=[],sectores=[],fertilizantes=[],viewSolId=null;
+let currentUser=null;
 const FK=['fert_sulfato_zn','fert_nitrato_amo','fert_nitrato_ca','fert_cloruro_k','fert_acido_boro','fert_sulfato_mg','fert_fma','fert_urea'];
 const FN=['Sulfato Zn','Nitrato Amonio','Nitrato Calcio','Cloruro K','Acido Borico','Sulfato Mg','FMA','Urea'];
 const DOW=['dom','lun','mar','mié','jue','vie','sáb'];
 const SEC_COLORS=['#2563eb','#059669','#d97706','#dc2626','#7c3aed','#0891b2','#65a30d','#be185d'];
 const FERT_MAX = 999;
+
+// ═══ Supabase Auth ═══
+const SUPABASE_URL = 'https://kqbegxcepoyfdxolocea.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtxYmVneGNlcG95ZmR4b2xvY2VhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NzU4NTIsImV4cCI6MjEwMjA1MTg1Mn0.obyalkzjstnfBXT1ubUZwCsfasxH0pmtfXoMzqy4V20';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function checkAuth() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session?.user) {
+    currentUser = session.user;
+    showApp();
+  } else {
+    showLogin();
+  }
+}
+
+function showLogin() {
+  document.getElementById('view-login').classList.remove('hidden');
+  document.getElementById('app-shell').classList.add('hidden');
+}
+
+function showApp() {
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('app-shell').classList.remove('hidden');
+  document.getElementById('user-email').textContent = currentUser?.email || '';
+  showView('calendario');
+}
+
+async function login(email, password) {
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  btn.textContent = 'Ingresando...';
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  btn.disabled = false;
+  btn.textContent = 'Iniciar Sesión';
+  if (error) {
+    errEl.textContent = error.message === 'Invalid login credentials'
+      ? 'Email o contraseña incorrectos'
+      : error.message;
+    return;
+  }
+  currentUser = data.user;
+  showApp();
+}
+
+async function logout() {
+  await supabaseClient.auth.signOut();
+  currentUser = null;
+  showLogin();
+}
+
+// Listen for session expiration
+supabaseClient.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    showLogin();
+  }
+});
 
 async function api(u,o={}){const r=await fetch(u,{headers:{'Content-Type':'application/json'},...o,body:o.body?JSON.stringify(o.body):undefined});return r.json();}
 
@@ -22,6 +83,10 @@ let fertSolId=null;
 function solData_has_fert(sols){return sols.some(s=>FK.some(k=>(s[k]||0)>0));}
 
 async function init(){
+  // Auth check first — if not logged in, show login and stop
+  await checkAuth();
+  if (!currentUser) return;
+
   [equipos,sectores,fertilizantes]=await Promise.all([api('/api/equipos'),api('/api/sectores'),api('/api/fertilizantes')]);
   const eqOpts=equipos.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
   ['cal-equipo','s-equipo','f-equipo','r-equipo'].forEach(id=>{
@@ -43,5 +108,6 @@ async function init(){
   document.getElementById('form-sol').onsubmit=onSubmitSol;
   document.getElementById('ma-form').onsubmit=onSubmitModal;
   document.getElementById('mv-del').onclick=onDeleteView;
+  document.getElementById('login-form').onsubmit=(e)=>{e.preventDefault();login(document.getElementById('login-email').value,document.getElementById('login-password').value);};
   showView('calendario');
 }
