@@ -26,10 +26,10 @@ async function openFertModalByDate(fecha,sectorId){
     });
     if(equipo){
       const asigData = await api(`/api/recetas?view=asignaciones&id_equipo=${equipo.id}`);
-      const asig = (Array.isArray(asigData) ? asigData : []).find(a => a.id_sector === sectorId);
-      if(asig && asig.receta?.id){
-        recetaNombre = asig.receta.nombre;
-        const detalles = await api(`/api/recetas?view=detalle&id_receta=${asig.receta.id}`);
+      const asig = (Array.isArray(asigData) ? asigData : []).find(a => a.sector_id === sectorId);
+      if(asig && asig.receta_id){
+        recetaNombre = asig.receta_nombre;
+        const detalles = await api(`/api/recetas?view=detalle&id_receta=${asig.receta_id}`);
         // Group by fert_name, sum kilos_plan across months for season total
         const seasonMap = {};
         (Array.isArray(detalles) ? detalles : []).forEach(det => {
