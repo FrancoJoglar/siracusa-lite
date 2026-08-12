@@ -1,26 +1,25 @@
 // ═══ FERT MODAL ═══
 async function openFertModalByDate(fecha,sectorId){
-  console.log('🧪 openFertModalByDate called:', fecha, sectorId);
+  const t0=performance.now();
   
-  // Fetch directo de la DB - siempre funciona
-  const solData = await api(`/api/solicitudes?search=true&fecha=${fecha}&id_sector=${sectorId}`);
-  console.log('🧪 solData:', solData);
+  const d=new Date(fecha+'T12:00:00');
+  const mes=d.getMonth()+1, anio=d.getFullYear();
+  const monthStart=fecha.substring(0,7)+'-01';
+  
+  // 3 llamadas en PARALELO (antes eran secuenciales = 3-6s, ahora ~1.5s)
+  const [solData, recetas, otherSols] = await Promise.all([
+    api(`/api/solicitudes?search=true&fecha=${fecha}&id_sector=${sectorId}`),
+    api(`/api/recetas?id_sector=${sectorId}&mes=${mes}&anio=${anio}`),
+    api(`/api/solicitudes?fecha_desde=${monthStart}&fecha_hasta=${fecha}&id_sector=${sectorId}`)
+  ]);
   
   if(!solData){toast('No hay solicitud para '+fecha);return;}
   
   fertSolId=solData.id;
   const secData=sectores.find(s=>s.id==sectorId);
-  console.log('🧪 secData:', secData);
   
-  const d=new Date(fecha+'T12:00:00');
-  const mes=d.getMonth()+1, anio=d.getFullYear();
-  // Load receta
-  const recetas=await api(`/api/recetas?id_sector=${sectorId}&mes=${mes}&anio=${anio}`);
   const recetaMap={};
   (Array.isArray(recetas) ? recetas : []).forEach(r=>{recetaMap[r.fert_name]={max:r.kilos_maximo};});
-  // Calcular usado este mes por OTRAS solicitudes del mismo sector
-  const monthStart=fecha.substring(0,7)+'-01';
-  const otherSols=await api(`/api/solicitudes?fecha_desde=${monthStart}&fecha_hasta=${fecha}&id_sector=${sectorId}`);
   const used={};
   FN.forEach(n=>used[n]=0);
   (Array.isArray(otherSols) ? otherSols : []).filter(s=>s.id!==fertSolId).forEach(s=>{
