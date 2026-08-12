@@ -24,7 +24,7 @@ export default async function handler(req, res) {
         query = query.eq('id_equipo', id_equipo);
       }
 
-      const { data, error } = await query.order('name');
+      const { data, error } = await query.order('id');
 
       if (error) throw error;
 

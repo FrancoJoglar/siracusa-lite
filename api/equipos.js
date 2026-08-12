@@ -17,7 +17,7 @@ export default async function handler(req, res) {
         .from('equipos')
         .select('*')
         .eq('active', true)
-        .order('name');
+        .order('id');
 
       if (error) throw error;
       return res.status(200).json(data);
