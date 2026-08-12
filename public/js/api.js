@@ -59,6 +59,7 @@ async function login(email, password) {
   }
   currentUser = data.user;
   showApp();
+  await init(); // Reload data now that we're authenticated
 }
 
 async function logout() {
