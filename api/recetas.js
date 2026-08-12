@@ -183,6 +183,35 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'id_sector and id_receta are required' });
       }
 
+      // Fetch new receta name
+      const { data: nuevaReceta } = await supabase
+        .schema('siracusa')
+        .from('recetas')
+        .select('nombre')
+        .eq('id', id_receta)
+        .single();
+
+      // Get current active assignment for the log
+      const { data: current } = await supabase
+        .schema('siracusa')
+        .from('sector_receta')
+        .select('id_receta')
+        .eq('id_sector', id_sector)
+        .eq('activo', true)
+        .maybeSingle();
+
+      const id_receta_anterior = current?.id_receta ?? null;
+      let receta_anterior_nombre = null;
+      if (id_receta_anterior) {
+        const { data: antRec } = await supabase
+          .schema('siracusa')
+          .from('recetas')
+          .select('nombre')
+          .eq('id', id_receta_anterior)
+          .single();
+        receta_anterior_nombre = antRec?.nombre ?? null;
+      }
+
       // 1. Deactivate current assignment
       const { error: deactErr } = await supabase
         .schema('siracusa')
@@ -212,10 +241,10 @@ export default async function handler(req, res) {
         .from('receta_change_log')
         .insert({
           id_sector,
-          id_receta_anterior: null,
+          id_receta_anterior: id_receta_anterior,
           id_receta_nueva: id_receta,
-          receta_anterior_nombre: null,
-          receta_nueva_nombre: null, // Will be populated by trigger or we fetch it
+          receta_anterior_nombre: receta_anterior_nombre,
+          receta_nueva_nombre: nuevaReceta?.nombre || '',
           fecha_cambio: new Date().toISOString(),
           motivo: motivo ?? '',
         });
