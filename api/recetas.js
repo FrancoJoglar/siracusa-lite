@@ -1,5 +1,43 @@
 import { supabase } from '../lib/supabase.js';
 
+// Map frontend fert_key names to DB fertilizer names for ID lookup
+const FERT_KEY_TO_NAME = {
+  fert_sulfato_zn: 'Sulfato Zinc',
+  fert_nitrato_amo: 'Nitrato Amonio',
+  fert_nitrato_ca: 'Nitrato Calcio',
+  fert_cloruro_k: 'Cloruro Potasio',
+  fert_acido_boro: 'Acido Borico',
+  fert_sulfato_mg: 'Sulfato Magnesio',
+  fert_fma: 'FMA',
+  fert_urea: 'Urea',
+};
+
+let fertIdMap = null;
+async function getFertIdMap() {
+  if (fertIdMap) return fertIdMap;
+  const { data } = await supabase.schema('siracusa').from('fertilizantes').select('id, name');
+  fertIdMap = {};
+  (data || []).forEach(f => { fertIdMap[f.name] = f.id; });
+  return fertIdMap;
+}
+
+async function resolveFertId(d) {
+  // If id_fertilizante is already provided, use it
+  if (d.id_fertilizante) return parseInt(d.id_fertilizante);
+  // If fert_key is provided, resolve to ID
+  if (d.fert_key) {
+    const map = await getFertIdMap();
+    const name = FERT_KEY_TO_NAME[d.fert_key] || d.fert_name;
+    return map[name] || null;
+  }
+  // If fert_name is provided, resolve to ID
+  if (d.fert_name) {
+    const map = await getFertIdMap();
+    return map[d.fert_name] || null;
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -53,12 +91,13 @@ export default async function handler(req, res) {
       if (recErr) throw recErr;
 
       // Insert all detalles
-      const rows = detalles.map((d) => ({
-        id_receta: receta.id,
-        mes: d.mes,
-        id_fertilizante: d.id_fertilizante,
-        kilos_plan: d.kilos_plan ?? 0,
-      }));
+      const rows = [];
+      for (const d of detalles) {
+        const fertId = await resolveFertId(d);
+        if (fertId) {
+          rows.push({ id_receta: receta.id, mes: d.mes, id_fertilizante: fertId, kilos_plan: d.kilos_plan ?? 0 });
+        }
+      }
 
       const { error: detErr } = await supabase
         .schema('siracusa')
@@ -104,12 +143,13 @@ export default async function handler(req, res) {
       if (delErr) throw delErr;
 
       // Insert new detalles
-      const rows = detalles.map((d) => ({
-        id_receta: parseInt(id),
-        mes: d.mes,
-        id_fertilizante: d.id_fertilizante,
-        kilos_plan: d.kilos_plan ?? 0,
-      }));
+      const rows = [];
+      for (const d of detalles) {
+        const fertId = await resolveFertId(d);
+        if (fertId) {
+          rows.push({ id_receta: parseInt(id), mes: d.mes, id_fertilizante: fertId, kilos_plan: d.kilos_plan ?? 0 });
+        }
+      }
 
       const { error: insErr } = await supabase
         .schema('siracusa')

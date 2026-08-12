@@ -110,7 +110,6 @@ async function init(){
   document.getElementById('s-fecha').valueAsDate=now;
   document.getElementById('f-desde').value='';
   document.getElementById('f-hasta').value='';
-  document.getElementById('r-mes').value=now.getMonth()+1;
   document.getElementById('s-equipo').onchange=onSecEquipo;
   document.getElementById('s-sector').onchange=onSecChange;
   document.getElementById('s-horas').oninput=updM3;
