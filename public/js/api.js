@@ -105,16 +105,17 @@ async function init(){
   });
   document.getElementById('s-ferts').innerHTML=FN.map((n,i)=>`<div><label class="block text-xs text-gray-500 mb-1">${n}</label><input type="number" step="1" min="0" id="sf-${i}" class="w-full border rounded px-2 py-1.5 text-sm" placeholder="0"></div>`).join('');
   const now=new Date();
-  document.getElementById('cal-mes').value=now.getMonth()+1;
-  document.getElementById('cal-anio').value=now.getFullYear();
-  document.getElementById('s-fecha').valueAsDate=now;
-  document.getElementById('f-desde').value='';
-  document.getElementById('f-hasta').value='';
-  document.getElementById('s-equipo').onchange=onSecEquipo;
-  document.getElementById('s-sector').onchange=onSecChange;
-  document.getElementById('s-horas').oninput=updM3;
-  document.getElementById('form-sol').onsubmit=onSubmitSol;
-  document.getElementById('ma-form').onsubmit=onSubmitModal;
-  document.getElementById('mv-del').onclick=onDeleteView;
+  const safeSet = (id, prop, val) => { const el = document.getElementById(id); if(el) el[prop] = val; };
+  safeSet('cal-mes', 'value', now.getMonth()+1);
+  safeSet('cal-anio', 'value', now.getFullYear());
+  const sf = document.getElementById('s-fecha'); if(sf) sf.valueAsDate = now;
+  const fd = document.getElementById('f-desde'); if(fd) fd.value = '';
+  const fh = document.getElementById('f-hasta'); if(fh) fh.value = '';
+  const se = document.getElementById('s-equipo'); if(se) se.onchange = onSecEquipo;
+  const ss = document.getElementById('s-sector'); if(ss) ss.onchange = onSecChange;
+  const sh = document.getElementById('s-horas'); if(sh) sh.oninput = updM3;
+  const fs = document.getElementById('form-sol'); if(fs) fs.onsubmit = onSubmitSol;
+  const mf = document.getElementById('ma-form'); if(mf) mf.onsubmit = onSubmitModal;
+  const md = document.getElementById('mv-del'); if(md) md.onclick = onDeleteView;
   showView('calendario');
 }

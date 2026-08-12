@@ -307,13 +307,28 @@ export default async function handler(req, res) {
       const { data: current } = await supabase
         .schema('siracusa')
         .from('sector_receta')
-        .select('id_receta, recetas!inner(nombre)')
+        .select('id_receta')
         .eq('id_sector', id_sector)
         .eq('activo', true)
         .maybeSingle();
 
       const id_receta_anterior = current?.id_receta ?? null;
-      const receta_anterior_nombre = current?.recetas?.nombre ?? null;
+
+      // If same receta, nothing to change
+      if (id_receta_anterior == id_receta_nueva) {
+        return res.status(200).json({ assigned: true, message: 'Receta sin cambios' });
+      }
+
+      let receta_anterior_nombre = null;
+      if (id_receta_anterior) {
+        const { data: antRec } = await supabase
+          .schema('siracusa')
+          .from('recetas')
+          .select('nombre')
+          .eq('id', id_receta_anterior)
+          .single();
+        receta_anterior_nombre = antRec?.nombre ?? null;
+      }
 
       // Get new receta name
       const { data: nuevaReceta } = await supabase
