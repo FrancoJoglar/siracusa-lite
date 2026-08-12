@@ -6,34 +6,65 @@ async function openFertModalByDate(fecha,sectorId){
   const mes=d.getMonth()+1, anio=d.getFullYear();
   const monthStart=fecha.substring(0,7)+'-01';
   
-  // 3 llamadas en PARALELO (antes eran secuenciales = 3-6s, ahora ~1.5s)
-  const [solData, recetas, otherSols] = await Promise.all([
-    api(`/api/solicitudes?search=true&fecha=${fecha}&id_sector=${sectorId}`),
-    api(`/api/recetas?id_sector=${sectorId}&mes=${mes}&anio=${anio}`),
-    api(`/api/solicitudes?fecha_desde=${monthStart}&fecha_hasta=${fecha}&id_sector=${sectorId}`)
-  ]);
-  
+  // 1. Load solicitud for this date+sector
+  const solData = await api(`/api/solicitudes?search=true&fecha=${fecha}&id_sector=${sectorId}`);
   if(!solData){toast('No hay solicitud para '+fecha);return;}
   
   fertSolId=solData.id;
   const secData=sectores.find(s=>s.id==sectorId);
   
-  const recetaMap={};
-  (Array.isArray(recetas) ? recetas : []).forEach(r=>{recetaMap[r.fert_name]={max:r.kilos_maximo};});
+  // 2. Load other solicitudes this month (for cumulative calc)
+  const otherSols = await api(`/api/solicitudes?fecha_desde=${monthStart}&fecha_hasta=${fecha}&id_sector=${sectorId}`);
+  
+  // 3. NEW RECETA MODEL: get active assignment + detalles
+  let recetaMap = {};
+  let recetaNombre = null;
+  try {
+    // Find the equipo for this sector
+    const equipo = equipos.find(e => {
+      return sectores.some(s => s.id === sectorId && s.id_equipo === e.id);
+    });
+    if(equipo){
+      const asigData = await api(`/api/recetas?view=asignaciones&id_equipo=${equipo.id}`);
+      const asig = (Array.isArray(asigData) ? asigData : []).find(a => a.id_sector === sectorId);
+      if(asig && asig.receta?.id){
+        recetaNombre = asig.receta.nombre;
+        const detalles = await api(`/api/recetas?view=detalle&id_receta=${asig.receta.id}`);
+        // Group by fert_name, sum kilos_plan across months for season total
+        const seasonMap = {};
+        (Array.isArray(detalles) ? detalles : []).forEach(det => {
+          if(!seasonMap[det.fert_name]) seasonMap[det.fert_name] = 0;
+          seasonMap[det.fert_name] += det.kilos_plan || 0;
+        });
+        // Convert to {fert_name: max} format (season total)
+        Object.keys(seasonMap).forEach(fn => {
+          recetaMap[fn] = { max: seasonMap[fn] };
+        });
+      }
+    }
+  } catch(e){
+    console.warn('Could not load receta assignment:', e);
+  }
+  
+  // Calculate used amounts (excluding current solicitud)
   const used={};
   FN.forEach(n=>used[n]=0);
   (Array.isArray(otherSols) ? otherSols : []).filter(s=>s.id!==fertSolId).forEach(s=>{
     FN.forEach((n,i)=>{used[n]+=(s[FK[i]]||0);});
   });
+
   // Header
+  const recetaInfo = recetaNombre ? `<span class="text-green-600">📋 ${recetaNombre}</span>` : '<span class="text-amber-600">⚠️ Sin receta</span>';
   document.getElementById('fm-header').innerHTML=`
     <div class="flex items-center gap-3">
       <button onclick="closeModal('modal-fert')" class="text-gray-400 hover:text-gray-600 text-xl">← Volver</button>
       <div>
         <h2 class="text-lg font-bold">🧪 Fertilizantes</h2>
         <p class="text-sm text-gray-500">${fecha} | ${secData?.equipo_name||''} — ${secData?.name||''} | ${secData?.variedad||''} | ${solData.horas} hrs | ${(solData.m3_programados||0).toFixed(0)} m³</p>
+        <p class="text-xs mt-0.5">${recetaInfo}</p>
       </div>
     </div>`;
+
   // Build rows
   let rows='';
   FN.forEach((n,i)=>{
@@ -49,7 +80,7 @@ async function openFertModalByDate(fecha,sectorId){
       <div class="flex items-center gap-3 p-3 bg-white rounded-lg border ${bgClass}">
         <div class="flex-1 min-w-0">
           <div class="font-medium text-sm">${n}</div>
-          <div class="text-[10px] text-gray-400">${max>0?`Máx: ${max.toFixed(0)} kg | Usado: ${alreadyUsed.toFixed(0)} kg`:'Sin receta'}</div>
+          <div class="text-[10px] text-gray-400">${max>0?`Temporada: ${max.toFixed(0)} kg | Usado: ${alreadyUsed.toFixed(0)} kg`:'Sin receta'}</div>
         </div>
         <div class="w-28 text-center">
           <input type="number" step="1" min="0" max="999" id="fm-${i}" value="${currentVal}" class="w-full border rounded-lg px-2 py-1.5 text-sm text-center font-semibold focus:ring-2 focus:ring-green-500" oninput="clampFertInput(this);updFmTotal()">

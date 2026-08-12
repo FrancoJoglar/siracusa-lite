@@ -98,7 +98,7 @@ async function init(){
 
   [equipos,sectores,fertilizantes]=await Promise.all([api('/api/equipos'),api('/api/sectores'),api('/api/fertilizantes')]);
   const eqOpts=equipos.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  ['cal-equipo','s-equipo','f-equipo','r-equipo'].forEach(id=>{
+  ['cal-equipo','s-equipo','f-equipo','asig-equipo'].forEach(id=>{
     const el=document.getElementById(id);
     if(id==='f-equipo') el.innerHTML='<option value="">Todos</option>'+eqOpts;
     else el.innerHTML='<option value="">Seleccionar...</option>'+eqOpts;

@@ -18,6 +18,12 @@ async function loadCalendar(){
   renderCalendar();
 }
 
+// ─── Helpers for receta model ───
+function findFertInList(list, fertName){
+  if(!Array.isArray(list)) return null;
+  return list.find(x => x.fert_name === fertName) || null;
+}
+
 function renderCalendar(){
   const m=document.getElementById('cal-mes').value,y=document.getElementById('cal-anio').value;
   document.getElementById('cal-empty').classList.add('hidden');
@@ -33,7 +39,7 @@ function renderCalendar(){
 
   const ns='border px-1 py-0.5 text-center';
 
-  // ═══ HEADER 1: Sector names ═══
+  // ═══ HEADER 1: Sector names (with receta) ═══
   let h='<thead>';
   h+='<tr><th class="sticky left-0 z-10 bg-gray-100 border px-2 py-1 text-left text-xs" style="min-width:55px"></th>';
   gridData.forEach((sec,si)=>{
@@ -41,7 +47,12 @@ function renderCalendar(){
     const isExp=expandedSector===sec.id;
     const arrow=isExp?'▾':'▸';
     const bg=isExp?SEC_COLORS[si%8]+'dd':SEC_COLORS[si%8];
-    h+=`<th colspan="${cols}" class="${ns} text-xs font-bold text-white py-1.5 cursor-pointer hover:opacity-90 select-none" style="background:${bg}" onclick="toggleSector(${sec.id})">${arrow} ${sec.name} <span class="font-normal text-[9px] opacity-80">${sec.variedad||''} ${sec.has_hectareas||0}ha</span></th>`;
+    // New receta model: sec.receta is {id, nombre} or null
+    const recetaNombre = sec.receta?.nombre || null;
+    const secLabel = recetaNombre
+      ? `${arrow} ${sec.name} | ${recetaNombre} | ${sec.variedad||''} ${sec.has_hectareas||0}ha`
+      : `${arrow} ${sec.name} | ⚠️ Sin receta | ${sec.variedad||''} ${sec.has_hectareas||0}ha`;
+    h+=`<th colspan="${cols}" class="${ns} text-xs font-bold text-white py-1.5 cursor-pointer hover:opacity-90 select-none" style="background:${bg}" onclick="toggleSector(${sec.id})">${escH(secLabel)}</th>`;
   });
   h+='</tr>';
 
@@ -114,23 +125,41 @@ function renderCalendar(){
   });
   h+='</tr>';
 
-  // ═══ MÁXIMO ═══
-  h+='<tr class="bg-amber-50 text-xs"><td class="sticky left-0 z-10 bg-amber-50 border px-2 py-1 font-medium text-amber-700">MÁX</td>';
+  // ═══ MÁX MES (kilos_plan from receta_mes) ═══
+  h+='<tr class="bg-amber-50 text-xs"><td class="sticky left-0 z-10 bg-amber-50 border px-2 py-1 font-medium text-amber-700">MÁX MES</td>';
   gridData.forEach(sec=>{
     const isExp=expandedSector===sec.id;
     h+=`<td class="${ns}"></td>`;
     if(isExp){
       FK.forEach((fk,fi)=>{
         const fertName=FN[fi];
-        const mx=(sec.recetas.find(r=>r.fert_name===fertName)||{}).kilos_maximo||0;
-        h+=`<td class="${ns} text-[9px] font-bold text-amber-700">${mx>0?mx.toFixed(0):''}</td>`;
+        const entry = findFertInList(sec.receta_mes, fertName);
+        const val = entry ? (entry.kilos_plan||0) : 0;
+        h+=`<td class="${ns} text-[9px] font-bold text-amber-700">${val>0?val.toFixed(1):''}</td>`;
       });
     }
     h+=`<td class="${ns}"></td><td class="${ns}"></td>`;
   });
   h+='</tr>';
 
-  // ═══ SALDO ═══
+  // ═══ MÁX TEMP (kilos_total from receta_temporada) ═══
+  h+='<tr class="bg-orange-50 text-xs"><td class="sticky left-0 z-10 bg-orange-50 border px-2 py-1 font-medium text-orange-700">MÁX TEMP</td>';
+  gridData.forEach(sec=>{
+    const isExp=expandedSector===sec.id;
+    h+=`<td class="${ns}"></td>`;
+    if(isExp){
+      FK.forEach((fk,fi)=>{
+        const fertName=FN[fi];
+        const entry = findFertInList(sec.receta_temporada, fertName);
+        const val = entry ? (entry.kilos_total||0) : 0;
+        h+=`<td class="${ns} text-[9px] font-bold text-orange-700">${val>0?val.toFixed(0):''}</td>`;
+      });
+    }
+    h+=`<td class="${ns}"></td><td class="${ns}"></td>`;
+  });
+  h+='</tr>';
+
+  // ═══ SALDO TEMP (saldo from saldo_temporada) ═══
   h+='<tr class="bg-blue-50 text-xs"><td class="sticky left-0 z-10 bg-blue-50 border px-2 py-1 font-medium text-blue-700">SALDO</td>';
   gridData.forEach(sec=>{
     const isExp=expandedSector===sec.id;
@@ -138,17 +167,45 @@ function renderCalendar(){
     if(isExp){
       FK.forEach((fk,fi)=>{
         const fertName=FN[fi];
-        const mx=(sec.recetas.find(r=>r.fert_name===fertName)||{}).kilos_maximo||0;
-        const used=sec.solicitudes.reduce((s,r)=>s+(r[fk]||0),0);
-        const saldo=mx-used;
-        const cls=mx===0?'text-gray-300':(saldo<0?'saldo-over':(saldo<mx*0.2?'saldo-warn':'saldo-ok'));
-        h+=`<td class="${ns} text-[9px] font-bold ${cls}">${mx>0?saldo.toFixed(0):''}</td>`;
+        const entry = findFertInList(sec.saldo_temporada, fertName);
+        const saldo = entry ? (entry.saldo||0) : 0;
+        // Also get max for color calc
+        const maxEntry = findFertInList(sec.receta_temporada, fertName);
+        const max = maxEntry ? (maxEntry.kilos_total||0) : 0;
+        const cls = max===0 ? 'text-gray-300' : (saldo<0 ? 'saldo-over' : (saldo<max*0.2 ? 'saldo-warn' : 'saldo-ok'));
+        h+=`<td class="${ns} text-[9px] font-bold ${cls}">${max>0?saldo.toFixed(0):''}</td>`;
       });
     }
     h+=`<td class="${ns}"></td><td class="${ns}"></td>`;
   });
   h+='</tr>';
 
+  // ═══ U.N / U.P₂O₅ / U.K₂O — nutrient units from applied ═══
+  const nutrientLabels = ['U.N','U.P₂O₅','U.K₂O'];
+  const nutrientKeys = ['N','P2O5','K2O'];
+  nutrientLabels.forEach((label, ni)=>{
+    h+=`<tr class="bg-purple-50 text-xs"><td class="sticky left-0 z-10 bg-purple-50 border px-2 py-1 font-medium text-purple-700">${label}</td>`;
+    gridData.forEach(sec=>{
+      const isExp=expandedSector===sec.id;
+      h+=`<td class="${ns}"></td>`;
+      if(isExp){
+        FK.forEach((fk,fi)=>{
+          const fertName=FN[fi];
+          const fertDef = fertilizantes.find(f=>f.name===fertName);
+          const coeff = fertDef ? (fertDef[nutrientKeys[ni]]||0) : 0;
+          const totalApplied = sec.solicitudes.reduce((s,r)=>s+(r[fk]||0),0);
+          const units = totalApplied * coeff;
+          h+=`<td class="${ns} text-[9px] font-medium text-purple-700">${units>0?units.toFixed(1):''}</td>`;
+        });
+      }
+      h+=`<td class="${ns}"></td><td class="${ns}"></td>`;
+    });
+    h+='</tr>';
+  });
+
   h+='</tbody>';
   document.getElementById('cal-table').innerHTML=h;
 }
+
+// HTML escape for header content
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}

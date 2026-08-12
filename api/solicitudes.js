@@ -8,7 +8,7 @@ function clampFert(v) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -99,6 +99,15 @@ export default async function handler(req, res) {
         solicitante, observaciones,
       } = req.body;
 
+      // Extract user from auth header if present
+      const authHeader = req.headers.authorization;
+      let userId = null;
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        const { data: { user } } = await supabase.auth.getUser(token);
+        userId = user?.id ?? null;
+      }
+
       // Get sector info for m3 calculation
       const { data: sector, error: secErr } = await supabase
         .schema('siracusa')
@@ -133,6 +142,7 @@ export default async function handler(req, res) {
           m3_programados,
           solicitante: solicitante ?? '',
           observaciones: observaciones ?? '',
+          id_usuario: userId,
           active: true,
         })
         .select('id')
