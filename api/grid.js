@@ -37,20 +37,25 @@ export default async function handler(req, res) {
     // 2. For each sector, get solicitudes and recetas for this month
     const result = await Promise.all(
       sectores.map(async (sec) => {
-        // Solicitudes filtered by strftime on fecha_riego
+        const dateFrom = `${yearStr}-${monthStr}-01`;
+        const lastDay = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+        const dateTo = `${yearStr}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+
+        // Solicitudes filtered by date range
         const { data: solicitudes } = await supabase
           .schema('siracusa')
           .from('solicitudes_riego')
           .select('*')
           .eq('id_sector', sec.id)
           .eq('active', true)
-          .filter('fecha_riego', 'like', `${yearStr}-${monthStr}-%`)
+          .gte('fecha_riego', dateFrom)
+          .lte('fecha_riego', dateTo)
           .order('fecha_riego');
 
         // Recetas for this sector/month
         const { data: recetasRaw } = await supabase
           .schema('siracusa')
-          .from('recetas')
+          .from('recetas_sector')
           .select('*, fertilizantes!inner(name, N, P2O5, K2O, CaO, MgO, Zn, B2O3, S)')
           .eq('id_sector', sec.id)
           .eq('mes', mes)
