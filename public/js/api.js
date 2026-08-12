@@ -20,6 +20,14 @@ async function checkAuth() {
   } else {
     showLogin();
   }
+  // Bind login form ALWAYS (even before login)
+  document.getElementById('login-form').onsubmit = (e) => {
+    e.preventDefault();
+    login(
+      document.getElementById('login-email').value,
+      document.getElementById('login-password').value
+    );
+  };
 }
 
 function showLogin() {
@@ -108,6 +116,5 @@ async function init(){
   document.getElementById('form-sol').onsubmit=onSubmitSol;
   document.getElementById('ma-form').onsubmit=onSubmitModal;
   document.getElementById('mv-del').onclick=onDeleteView;
-  document.getElementById('login-form').onsubmit=(e)=>{e.preventDefault();login(document.getElementById('login-email').value,document.getElementById('login-password').value);};
   showView('calendario');
 }
