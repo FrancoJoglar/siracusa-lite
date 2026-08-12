@@ -108,8 +108,8 @@ async function init(){
   document.getElementById('cal-mes').value=now.getMonth()+1;
   document.getElementById('cal-anio').value=now.getFullYear();
   document.getElementById('s-fecha').valueAsDate=now;
-  document.getElementById('f-desde').valueAsDate=new Date(now.getFullYear(),now.getMonth(),1);
-  document.getElementById('f-hasta').valueAsDate=now;
+  document.getElementById('f-desde').value='';
+  document.getElementById('f-hasta').value='';
   document.getElementById('r-mes').value=now.getMonth()+1;
   document.getElementById('s-equipo').onchange=onSecEquipo;
   document.getElementById('s-sector').onchange=onSecChange;
