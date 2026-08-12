@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
       const { data: recetas, error: recErr } = await supabase
         .schema('siracusa')
-        .from('recetas')
+        .from('recetas_sector')
         .select('*, fertilizantes!inner(name, N, P2O5, K2O, CaO, MgO, Zn, B2O3, S)')
         .eq('id_sector', id_equipo)
         .eq('mes', mes)
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
       let query = supabase
         .schema('siracusa')
-        .from('recetas')
+        .from('recetas_sector')
         .select('*, fertilizantes!inner(name, N, P2O5, K2O, CaO, MgO, Zn, B2O3, S)');
 
       if (id_sector) query = query.eq('id_sector', id_sector);
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
 
       const { data, error } = await supabase
         .schema('siracusa')
-        .from('recetas')
+        .from('recetas_sector')
         .upsert(rows, {
           onConflict: 'id_sector,id_fertilizante,mes,anio',
           ignoreDuplicates: false,
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
       // Try insert first
       const { error: insertErr } = await supabase
         .schema('siracusa')
-        .from('recetas')
+        .from('recetas_sector')
         .insert({
           id_sector,
           id_fertilizante,
@@ -130,7 +130,7 @@ export default async function handler(req, res) {
         if (insertErr.code === '23505') {
           const { error: updateErr } = await supabase
             .schema('siracusa')
-            .from('recetas')
+            .from('recetas_sector')
             .update({ kilos_maximo })
             .eq('id_sector', id_sector)
             .eq('id_fertilizante', id_fertilizante)
@@ -154,7 +154,7 @@ export default async function handler(req, res) {
 
       const { data, error } = await supabase
         .schema('siracusa')
-        .from('recetas')
+        .from('recetas_sector')
         .update({ kilos_maximo })
         .eq('id', id)
         .select()
@@ -168,7 +168,7 @@ export default async function handler(req, res) {
     if (req.method === 'DELETE' && id) {
       const { error } = await supabase
         .schema('siracusa')
-        .from('recetas')
+        .from('recetas_sector')
         .delete()
         .eq('id', id);
 

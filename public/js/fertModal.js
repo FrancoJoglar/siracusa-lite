@@ -17,13 +17,13 @@ async function openFertModalByDate(fecha,sectorId){
   // Load receta
   const recetas=await api(`/api/recetas?id_sector=${sectorId}&mes=${mes}&anio=${anio}`);
   const recetaMap={};
-  recetas.forEach(r=>{recetaMap[r.fert_name]={max:r.kilos_maximo};});
+  (Array.isArray(recetas) ? recetas : []).forEach(r=>{recetaMap[r.fert_name]={max:r.kilos_maximo};});
   // Calcular usado este mes por OTRAS solicitudes del mismo sector
   const monthStart=fecha.substring(0,7)+'-01';
   const otherSols=await api(`/api/solicitudes?fecha_desde=${monthStart}&fecha_hasta=${fecha}&id_sector=${sectorId}`);
   const used={};
   FN.forEach(n=>used[n]=0);
-  otherSols.filter(s=>s.id!==fertSolId).forEach(s=>{
+  (Array.isArray(otherSols) ? otherSols : []).filter(s=>s.id!==fertSolId).forEach(s=>{
     FN.forEach((n,i)=>{used[n]+=(s[FK[i]]||0);});
   });
   // Header
