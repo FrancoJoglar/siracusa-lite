@@ -252,13 +252,13 @@ export default async function handler(req, res) {
         receta_anterior_nombre = antRec?.nombre ?? null;
       }
 
-      // 1. Deactivate current assignment
+      // 1. Keep one technical assignment row per sector. Historical changes
+      // are stored in receta_change_log.
       const { error: deactErr } = await supabase
         .schema('siracusa')
         .from('sector_receta')
-        .update({ activo: false })
-        .eq('id_sector', id_sector)
-        .eq('activo', true);
+        .delete()
+        .eq('id_sector', id_sector);
       if (deactErr) throw deactErr;
 
       // 2. Insert new assignment
@@ -338,13 +338,14 @@ export default async function handler(req, res) {
         .eq('id', id_receta_nueva)
         .single();
 
-      // 1. Deactivate current
+      // 1. Remove technical assignment rows for this sector.
+      // The durable history lives in receta_change_log; keeping one active
+      // row avoids conflicts with the legacy UNIQUE constraint.
       const { error: deactErr } = await supabase
         .schema('siracusa')
         .from('sector_receta')
-        .update({ activo: false })
-        .eq('id_sector', id_sector)
-        .eq('activo', true);
+        .delete()
+        .eq('id_sector', id_sector);
       if (deactErr) throw deactErr;
 
       // 2. Reuse an existing historical row when possible. This avoids
