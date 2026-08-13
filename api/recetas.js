@@ -347,18 +347,46 @@ export default async function handler(req, res) {
         .eq('activo', true);
       if (deactErr) throw deactErr;
 
-      // 2. Insert new assignment
-      const { data: newAssign, error: insErr } = await supabase
+      // 2. Reuse an existing historical row when possible. This avoids
+      // conflicts with the UNIQUE(id_sector, id_receta, activo) constraint.
+      const { data: historical } = await supabase
         .schema('siracusa')
         .from('sector_receta')
-        .insert({
-          id_sector,
-          id_receta: id_receta_nueva,
-          fecha_asignacion: new Date().toISOString(),
-          activo: true,
-        })
-        .select()
-        .single();
+        .select('*')
+        .eq('id_sector', id_sector)
+        .eq('id_receta', id_receta_nueva)
+        .eq('activo', false)
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let newAssign;
+      let insErr;
+      if (historical) {
+        const result = await supabase
+          .schema('siracusa')
+          .from('sector_receta')
+          .update({ activo: true, fecha_asignacion: new Date().toISOString() })
+          .eq('id', historical.id)
+          .select()
+          .single();
+        newAssign = result.data;
+        insErr = result.error;
+      } else {
+        const result = await supabase
+          .schema('siracusa')
+          .from('sector_receta')
+          .insert({
+            id_sector,
+            id_receta: id_receta_nueva,
+            fecha_asignacion: new Date().toISOString(),
+            activo: true,
+          })
+          .select()
+          .single();
+        newAssign = result.data;
+        insErr = result.error;
+      }
       if (insErr) throw insErr;
 
       // 3. Log the change

@@ -212,7 +212,7 @@ function renderAssignments(list){
     return;
   }
   el.innerHTML = list.map(a => {
-    const recetaNombre = a.receta?.nombre || null;
+    const recetaNombre = a.receta_nombre || null;
     const hasReceta = !!recetaNombre;
     return `<tr class="border-b hover:bg-gray-50">
       <td class="px-4 py-3 text-sm font-medium text-gray-800">${esc(a.sector_name||'Sector')}</td>
@@ -222,7 +222,7 @@ function renderAssignments(list){
       </td>
       <td class="px-4 py-3 text-sm text-gray-500">${a.fecha_asignacion ? formatDate(a.fecha_asignacion) : '—'}</td>
       <td class="px-4 py-3 text-sm text-right">
-        <button onclick="openCambiarReceta(${a.id_sector},'${esc(a.sector_name||'')}','${esc(a.variedad||'')}',${a.receta?.id||0},'${esc(recetaNombre||'')}')"
+        <button onclick="openCambiarReceta(${a.sector_id},'${esc(a.sector_name||'')}','${esc(a.variedad||'')}',${a.receta_id||0},'${esc(recetaNombre||'')}')"
           class="text-blue-600 hover:text-blue-800 font-medium text-xs px-2 py-1 bg-blue-50 rounded hover:bg-blue-100">
           Cambiar
         </button>
@@ -287,12 +287,13 @@ async function confirmarCambio(){
   const newId = document.getElementById('cr-select').value;
   if(!newId){ toast('⚠️ Seleccioná una receta'); return; }
   const motivo = document.getElementById('cr-motivo').value.trim();
-  await api('/api/recetas?view=cambiar', {
+  const res = await api('/api/recetas?view=cambiar', {
     method: 'POST',
     body: {id_sector: changeSectorId, id_receta_nueva: parseInt(newId), motivo}
   });
+  if(res?.error){ toast('❌ '+res.error); return; }
   closeModal('modal-cambiar');
-  toast('✅ Receta cambiada');
+  toast(res?.message || '✅ Receta cambiada');
   loadAssignments();
   loadChangeLog();
 }
