@@ -490,7 +490,8 @@ export default async function handler(req, res) {
 
       if (secErr) throw secErr;
 
-      const sectorIds = sectores.map((sec) => sec.id);
+      const sectorIds = (sectores || []).map((sec) => sec.id);
+      if (!sectorIds.length) return res.status(200).json([]);
 
       // 1. Active assignments for all sectors (one query)
       const { data: assignments, error: asgErr } = await supabase
