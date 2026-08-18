@@ -2,8 +2,15 @@
   "name": "siracusa-lite",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "build:css": "tailwindcss -i src/input.css -o public/tailwind.css"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
     "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
   }
 }
