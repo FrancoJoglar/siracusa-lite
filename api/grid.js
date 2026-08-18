@@ -60,16 +60,21 @@ export default async function handler(req, res) {
 
     const sectorIds = sectores.map((sec) => sec.id);
 
-    // 2. All season solicitudes for these sectors (one query) — covers both
-    //    the month view and the applied-amount aggregation.
-    const { data: solsSeason, error: solErr } = await supabase
+    // Wide range covering both the requested month and the full season
+    // (the month can fall OUTSIDE the Sept–Apr season, e.g. August).
+    const wideStart = dateFrom < seasonStart ? dateFrom : seasonStart;
+    const wideEnd = dateTo > seasonEnd ? dateTo : seasonEnd;
+
+    // 2. All solicitudes in the wide range for these sectors (one query) —
+    //    covers both the month view and the applied-amount aggregation.
+    const { data: solsAll, error: solErr } = await supabase
       .schema('siracusa')
       .from('solicitudes_riego')
       .select('*')
       .in('id_sector', sectorIds)
       .eq('active', true)
-      .gte('fecha_riego', seasonStart)
-      .lte('fecha_riego', seasonEnd)
+      .gte('fecha_riego', wideStart)
+      .lte('fecha_riego', wideEnd)
       .order('fecha_riego');
 
     if (solErr) throw solErr;
@@ -110,7 +115,7 @@ export default async function handler(req, res) {
     }
 
     const solsBySector = new Map();
-    for (const s of solsSeason || []) {
+    for (const s of solsAll || []) {
       const list = solsBySector.get(s.id_sector) || [];
       list.push(s);
       solsBySector.set(s.id_sector, list);
@@ -161,14 +166,17 @@ export default async function handler(req, res) {
           S: d.fertilizantes?.S ?? 0,
         }));
 
-      // Month solicitudes (full rows) + applied amounts (season)
+      // Month solicitudes (full rows) + applied amounts (season only)
       const sectorSols = solsBySector.get(sec.id) || [];
       const solicitudes = sectorSols.filter(
         (s) => s.fecha_riego >= dateFrom && s.fecha_riego <= dateTo
       );
+      const seasonSols = sectorSols.filter(
+        (s) => s.fecha_riego >= seasonStart && s.fecha_riego <= seasonEnd
+      );
 
       const appliedAgg = {};
-      for (const sol of sectorSols) {
+      for (const sol of seasonSols) {
         for (const col of FERT_COLS) {
           const val = parseFloat(sol[col]) || 0;
           if (val > 0) {
