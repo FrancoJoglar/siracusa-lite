@@ -11,6 +11,7 @@ const FERT_COL_MAP = {
   fert_fma: 'FMA',
   fert_urea: 'Urea',
 };
+const FERT_COLS = Object.keys(FERT_COL_MAP);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -33,14 +34,15 @@ export default async function handler(req, res) {
 
   const monthStr = String(mes).padStart(2, '0');
   const yearStr = String(anio);
+  const mesNum = parseInt(mes, 10);
 
   // Season bounds: Sept of anio → Apr of anio+1
   const seasonStart = `${yearStr}-09-01`;
-  const seasonEnd = `${parseInt(yearStr) + 1}-04-30`;
+  const seasonEnd = `${parseInt(yearStr, 10) + 1}-04-30`;
 
   // Month date range
   const dateFrom = `${yearStr}-${monthStr}-01`;
-  const lastDay = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+  const lastDay = new Date(parseInt(yearStr, 10), mesNum, 0).getDate();
   const dateTo = `${yearStr}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
 
   try {
@@ -54,156 +56,169 @@ export default async function handler(req, res) {
       .order('name');
 
     if (secErr) throw secErr;
+    if (!sectores?.length) return res.status(200).json([]);
 
-    // 2. For each sector, build the full grid row
-    const result = await Promise.all(
-      sectores.map(async (sec) => {
-        // ── Solicitudes for this month ──────────────────────────────
-        const { data: solicitudes } = await supabase
-          .schema('siracusa')
-          .from('solicitudes_riego')
-          .select('*')
-          .eq('id_sector', sec.id)
-          .eq('active', true)
-          .gte('fecha_riego', dateFrom)
-          .lte('fecha_riego', dateTo)
-          .order('fecha_riego');
+    const sectorIds = sectores.map((sec) => sec.id);
 
-        // ── Active receta assignment ────────────────────────────────
-        const { data: assignment } = await supabase
-          .schema('siracusa')
-          .from('sector_receta')
-          .select('id_receta, recetas!inner(id, nombre, tipo_cultivo)')
-          .eq('id_sector', sec.id)
-          .eq('activo', true)
-          .maybeSingle();
+    // 2. All season solicitudes for these sectors (one query) — covers both
+    //    the month view and the applied-amount aggregation.
+    const { data: solsSeason, error: solErr } = await supabase
+      .schema('siracusa')
+      .from('solicitudes_riego')
+      .select('*')
+      .in('id_sector', sectorIds)
+      .eq('active', true)
+      .gte('fecha_riego', seasonStart)
+      .lte('fecha_riego', seasonEnd)
+      .order('fecha_riego');
 
-        const recetaInfo = assignment?.recetas ?? null;
-        const recetaId = assignment?.id_receta ?? null;
+    if (solErr) throw solErr;
 
-        // ── ALL receta_detalle for assigned receta (season totals) ──
-        let recetaTemporada = [];
-        let recetaMes = [];
-        if (recetaId) {
-          const { data: allDetalles } = await supabase
-            .schema('siracusa')
-            .from('receta_detalle')
-            .select('mes, kilos_plan, fertilizantes!inner(name, N, P2O5, K2O, CaO, MgO, Zn, B2O3, S)')
-            .eq('id_receta', recetaId);
+    // 3. Active receta assignments for these sectors (one query)
+    const { data: assignments, error: assignErr } = await supabase
+      .schema('siracusa')
+      .from('sector_receta')
+      .select('id_sector, id_receta, recetas!inner(id, nombre, tipo_cultivo)')
+      .in('id_sector', sectorIds)
+      .eq('activo', true);
 
-          // Receta temporada: aggregate all months by fertilizer
-          const tempAgg = {};
-          for (const d of allDetalles || []) {
-            const name = d.fertilizantes?.name;
-            if (!name) continue;
-            if (!tempAgg[name]) {
-              tempAgg[name] = {
-                fert_name: name,
-                kilos_total: 0,
-                N: d.fertilizantes?.N ?? 0,
-                P2O5: d.fertilizantes?.P2O5 ?? 0,
-                K2O: d.fertilizantes?.K2O ?? 0,
-                CaO: d.fertilizantes?.CaO ?? 0,
-                MgO: d.fertilizantes?.MgO ?? 0,
-                Zn: d.fertilizantes?.Zn ?? 0,
-                B2O3: d.fertilizantes?.B2O3 ?? 0,
-                S: d.fertilizantes?.S ?? 0,
-              };
-            }
-            tempAgg[name].kilos_total += d.kilos_plan;
-          }
-          recetaTemporada = Object.values(tempAgg);
+    if (assignErr) throw assignErr;
 
-          // Receta mes: only current month
-          const mesNum = parseInt(mes);
-          recetaMes = (allDetalles || [])
-            .filter((d) => d.mes === mesNum)
-            .map((d) => ({
-              fert_name: d.fertilizantes?.name,
-              kilos_plan: d.kilos_plan,
-              N: d.fertilizantes?.N ?? 0,
-              P2O5: d.fertilizantes?.P2O5 ?? 0,
-              K2O: d.fertilizantes?.K2O ?? 0,
-              CaO: d.fertilizantes?.CaO ?? 0,
-              MgO: d.fertilizantes?.MgO ?? 0,
-              Zn: d.fertilizantes?.Zn ?? 0,
-              B2O3: d.fertilizantes?.B2O3 ?? 0,
-              S: d.fertilizantes?.S ?? 0,
-            }));
+    // 4. All receta_detalle for the assigned recetas (one query)
+    const recetaIds = [...new Set((assignments || []).map((a) => a.id_receta))];
+    let allDetalles = [];
+    if (recetaIds.length) {
+      const { data: detalles, error: detErr } = await supabase
+        .schema('siracusa')
+        .from('receta_detalle')
+        .select('id_receta, mes, kilos_plan, fertilizantes!inner(name, N, P2O5, K2O, CaO, MgO, Zn, B2O3, S)')
+        .in('id_receta', recetaIds);
+
+      if (detErr) throw detErr;
+      allDetalles = detalles || [];
+    }
+
+    // ── In-memory aggregation ────────────────────────────────────────
+    const assignmentBySector = new Map();
+    for (const a of assignments || []) assignmentBySector.set(a.id_sector, a);
+
+    const detallesByReceta = new Map();
+    for (const d of allDetalles) {
+      const list = detallesByReceta.get(d.id_receta) || [];
+      list.push(d);
+      detallesByReceta.set(d.id_receta, list);
+    }
+
+    const solsBySector = new Map();
+    for (const s of solsSeason || []) {
+      const list = solsBySector.get(s.id_sector) || [];
+      list.push(s);
+      solsBySector.set(s.id_sector, list);
+    }
+
+    const result = sectores.map((sec) => {
+      const assignment = assignmentBySector.get(sec.id);
+      const recetaInfo = assignment?.recetas ?? null;
+      const recetaId = assignment?.id_receta ?? null;
+      const detalles = detallesByReceta.get(recetaId) || [];
+
+      // Receta temporada: aggregate all months by fertilizer
+      const tempAgg = {};
+      for (const d of detalles) {
+        const name = d.fertilizantes?.name;
+        if (!name) continue;
+        if (!tempAgg[name]) {
+          tempAgg[name] = {
+            fert_name: name,
+            kilos_total: 0,
+            N: d.fertilizantes?.N ?? 0,
+            P2O5: d.fertilizantes?.P2O5 ?? 0,
+            K2O: d.fertilizantes?.K2O ?? 0,
+            CaO: d.fertilizantes?.CaO ?? 0,
+            MgO: d.fertilizantes?.MgO ?? 0,
+            Zn: d.fertilizantes?.Zn ?? 0,
+            B2O3: d.fertilizantes?.B2O3 ?? 0,
+            S: d.fertilizantes?.S ?? 0,
+          };
         }
+        tempAgg[name].kilos_total += d.kilos_plan;
+      }
+      const recetaTemporada = Object.values(tempAgg);
 
-        // ── Applied amounts this season ─────────────────────────────
-        const { data: solsSeason } = await supabase
-          .schema('siracusa')
-          .from('solicitudes_riego')
-          .select(Object.keys(FERT_COL_MAP).join(', '))
-          .eq('id_sector', sec.id)
-          .eq('active', true)
-          .gte('fecha_riego', seasonStart)
-          .lte('fecha_riego', seasonEnd);
-
-        const appliedAgg = {};
-        for (const sol of solsSeason || []) {
-          for (const [col, name] of Object.entries(FERT_COL_MAP)) {
-            const val = parseFloat(sol[col]) || 0;
-            if (val > 0) {
-              if (!appliedAgg[name]) appliedAgg[name] = 0;
-              appliedAgg[name] += val;
-            }
-          }
-        }
-        const aplicadoTemporada = Object.entries(appliedAgg).map(([fert_name, kilos_aplicados]) => ({
-          fert_name,
-          kilos_aplicados,
+      // Receta mes: only current month
+      const recetaMes = detalles
+        .filter((d) => d.mes === mesNum)
+        .map((d) => ({
+          fert_name: d.fertilizantes?.name,
+          kilos_plan: d.kilos_plan,
+          N: d.fertilizantes?.N ?? 0,
+          P2O5: d.fertilizantes?.P2O5 ?? 0,
+          K2O: d.fertilizantes?.K2O ?? 0,
+          CaO: d.fertilizantes?.CaO ?? 0,
+          MgO: d.fertilizantes?.MgO ?? 0,
+          Zn: d.fertilizantes?.Zn ?? 0,
+          B2O3: d.fertilizantes?.B2O3 ?? 0,
+          S: d.fertilizantes?.S ?? 0,
         }));
 
-        // ── Saldo: MÁX TEMP - applied ──────────────────────────────
-        const saldoMap = {};
-        for (const r of recetaTemporada) {
-          saldoMap[r.fert_name] = r.kilos_total;
-        }
-        for (const a of aplicadoTemporada) {
-          if (!saldoMap[a.fert_name]) saldoMap[a.fert_name] = 0;
-          saldoMap[a.fert_name] -= a.kilos_aplicados;
-        }
-        // Include applied fertilizers that don't have a receta entry
-        for (const a of aplicadoTemporada) {
-          if (!(a.fert_name in saldoMap)) {
-            saldoMap[a.fert_name] = -a.kilos_aplicados;
+      // Month solicitudes (full rows) + applied amounts (season)
+      const sectorSols = solsBySector.get(sec.id) || [];
+      const solicitudes = sectorSols.filter(
+        (s) => s.fecha_riego >= dateFrom && s.fecha_riego <= dateTo
+      );
+
+      const appliedAgg = {};
+      for (const sol of sectorSols) {
+        for (const col of FERT_COLS) {
+          const val = parseFloat(sol[col]) || 0;
+          if (val > 0) {
+            const name = FERT_COL_MAP[col];
+            if (!appliedAgg[name]) appliedAgg[name] = 0;
+            appliedAgg[name] += val;
           }
         }
-        const saldoTemporada = Object.entries(saldoMap)
-          .map(([fert_name, saldo]) => ({ fert_name, saldo }))
-          .filter((s) => {
-            // Only include fertilizers with data in receta OR applied
-            return recetaTemporada.some((r) => r.fert_name === s.fert_name) ||
-              appliedAgg[s.fert_name] > 0;
-          });
+      }
+      const aplicadoTemporada = Object.entries(appliedAgg).map(([fert_name, kilos_aplicados]) => ({
+        fert_name,
+        kilos_aplicados,
+      }));
 
-        // Filter recetaTemporada and aplicadoTemporada to only relevant fertilizers
-        const relevantFerts = new Set([
-          ...recetaTemporada.map((r) => r.fert_name),
-          ...Object.keys(appliedAgg).filter((n) => appliedAgg[n] > 0),
-        ]);
+      // Saldo: MÁX TEMP - applied
+      const saldoMap = {};
+      for (const r of recetaTemporada) saldoMap[r.fert_name] = r.kilos_total;
+      for (const a of aplicadoTemporada) {
+        if (!saldoMap[a.fert_name]) saldoMap[a.fert_name] = 0;
+        saldoMap[a.fert_name] -= a.kilos_aplicados;
+      }
+      for (const a of aplicadoTemporada) {
+        if (!(a.fert_name in saldoMap)) saldoMap[a.fert_name] = -a.kilos_aplicados;
+      }
+      const saldoTemporada = Object.entries(saldoMap)
+        .map(([fert_name, saldo]) => ({ fert_name, saldo }))
+        .filter((s) => recetaTemporada.some((r) => r.fert_name === s.fert_name) || appliedAgg[s.fert_name] > 0);
 
-        const filteredRecetaTemporada = recetaTemporada.filter((r) => relevantFerts.has(r.fert_name));
-        const filteredAplicadoTemporada = aplicadoTemporada.filter((a) => relevantFerts.has(a.fert_name));
+      // Filter to only relevant fertilizers
+      const relevantFerts = new Set([
+        ...recetaTemporada.map((r) => r.fert_name),
+        ...Object.keys(appliedAgg).filter((n) => appliedAgg[n] > 0),
+      ]);
+      const filteredRecetaTemporada = recetaTemporada.filter((r) => relevantFerts.has(r.fert_name));
+      const filteredAplicadoTemporada = aplicadoTemporada.filter((a) => relevantFerts.has(a.fert_name));
 
-        return {
-          id: sec.id,
-          name: sec.name,
-          equipo_name: sec.equipos?.name,
-          has_hectareas: sec.has_hectareas,
-          variedad: sec.variedad,
-          receta: recetaInfo ? { id: recetaInfo.id, nombre: recetaInfo.nombre, tipo_cultivo: recetaInfo.tipo_cultivo } : null,
-          receta_mes: recetaMes,
-          receta_temporada: filteredRecetaTemporada,
-          aplicado_temporada: filteredAplicadoTemporada,
-          saldo_temporada: saldoTemporada,
-          solicitudes: solicitudes || [],
-        };
-      })
-    );
+      return {
+        id: sec.id,
+        name: sec.name,
+        equipo_name: sec.equipos?.name,
+        has_hectareas: sec.has_hectareas,
+        variedad: sec.variedad,
+        receta: recetaInfo ? { id: recetaInfo.id, nombre: recetaInfo.nombre, tipo_cultivo: recetaInfo.tipo_cultivo } : null,
+        receta_mes: recetaMes,
+        receta_temporada: filteredRecetaTemporada,
+        aplicado_temporada: filteredAplicadoTemporada,
+        saldo_temporada: saldoTemporada,
+        solicitudes,
+      };
+    });
 
     return res.status(200).json(result);
   } catch (err) {

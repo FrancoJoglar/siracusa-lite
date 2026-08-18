@@ -1,6 +1,7 @@
 // ═══ CALENDARIO ═══
 const COLS_COLLAPSED = 3; // Hrs | M³ | 🧪
 const COLS_EXPANDED = 11; // Hrs | SZn | NAm | NCa | ClK | Bor | Mg | FMA | Ure | M³ | 🧪
+let calendarAbort=null;
 
 function toggleSector(secId){
   expandedSector = expandedSector===secId ? null : secId;
@@ -11,11 +12,21 @@ function getCols(sec){return expandedSector===sec.id ? COLS_EXPANDED : COLS_COLL
 
 async function loadCalendar(){
   const eq=document.getElementById('cal-equipo').value,m=document.getElementById('cal-mes').value,y=document.getElementById('cal-anio').value;
-  if(!eq){document.getElementById('cal-empty').classList.remove('hidden');document.getElementById('cal-grid').classList.add('hidden');return;}
-  gridData=await api(`/api/grid?id_equipo=${eq}&mes=${m}&anio=${y}`);
-  expandedSector=null;
-  if(!gridData.length){document.getElementById('cal-empty').innerHTML='<p class="text-gray-400">Sin sectores</p>';return;}
-  renderCalendar();
+  const empty=document.getElementById('cal-empty'),grid=document.getElementById('cal-grid');
+  if(calendarAbort)calendarAbort.abort();
+  if(!eq){empty.classList.remove('hidden');grid.classList.add('hidden');return;}
+  empty.innerHTML='<p class="text-gray-400">Cargando calendario…</p>';
+  empty.classList.remove('hidden');grid.classList.add('hidden');
+  calendarAbort=new AbortController();
+  try{
+    const data=await api(`/api/grid?id_equipo=${eq}&mes=${m}&anio=${y}`,{signal:calendarAbort.signal});
+    gridData=data;expandedSector=null;
+    if(!gridData.length){empty.innerHTML='<p class="text-gray-400">Sin sectores</p>';return;}
+    renderCalendar();
+  }catch(e){
+    if(isAbortError(e))return;
+    empty.innerHTML='<p class="text-red-500">No se pudo cargar el calendario</p>';
+  }
 }
 
 // ─── Helpers for receta model ───

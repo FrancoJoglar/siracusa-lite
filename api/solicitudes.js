@@ -73,7 +73,7 @@ export default async function handler(req, res) {
         query = query.eq('sectores.id_equipo', id_equipo);
       }
 
-      const { data, error } = await query.order('fecha_riego', { ascending: false });
+      const { data, error } = await query.order('fecha_riego', { ascending: false }).limit(500);
 
       if (error) throw error;
 
@@ -98,15 +98,6 @@ export default async function handler(req, res) {
         fert_acido_boro, fert_sulfato_mg, fert_fma, fert_urea,
         solicitante, observaciones,
       } = req.body;
-
-      // Extract user from auth header if present
-      const authHeader = req.headers.authorization;
-      let userId = null;
-      if (authHeader?.startsWith('Bearer ')) {
-        const token = authHeader.split(' ')[1];
-        const { data: { user } } = await supabase.auth.getUser(token);
-        userId = user?.id ?? null;
-      }
 
       // Get sector info for m3 calculation
       const { data: sector, error: secErr } = await supabase
@@ -142,7 +133,6 @@ export default async function handler(req, res) {
           m3_programados,
           solicitante: solicitante ?? '',
           observaciones: observaciones ?? '',
-          id_usuario: userId,
           active: true,
         })
         .select('id')

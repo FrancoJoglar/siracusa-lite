@@ -189,26 +189,31 @@ export default async function handler(req, res) {
 
       if (secErr) throw secErr;
 
-      // For each sector, get active assignment
-      const result = await Promise.all(
-        sectores.map(async (sec) => {
-          const { data: assignment } = await supabase
-            .schema('siracusa')
-            .from('sector_receta')
-            .select('id_receta, fecha_asignacion, recetas!inner(id, nombre)')
-            .eq('id_sector', sec.id)
-            .eq('activo', true)
-            .maybeSingle();
+      const sectorIds = sectores.map((sec) => sec.id);
 
-          return {
-            sector_id: sec.id,
-            sector_name: sec.name,
-            receta_id: assignment?.recetas?.id ?? null,
-            receta_nombre: assignment?.recetas?.nombre ?? null,
-            fecha_asignacion: assignment?.fecha_asignacion ?? null,
-          };
-        })
-      );
+      // One query for all active assignments in this equipo
+      const { data: assignments, error: asgErr } = await supabase
+        .schema('siracusa')
+        .from('sector_receta')
+        .select('id_sector, fecha_asignacion, recetas!inner(id, nombre)')
+        .in('id_sector', sectorIds)
+        .eq('activo', true);
+
+      if (asgErr) throw asgErr;
+
+      const assignmentBySector = new Map();
+      for (const a of assignments || []) assignmentBySector.set(a.id_sector, a);
+
+      const result = sectores.map((sec) => {
+        const assignment = assignmentBySector.get(sec.id);
+        return {
+          sector_id: sec.id,
+          sector_name: sec.name,
+          receta_id: assignment?.recetas?.id ?? null,
+          receta_nombre: assignment?.recetas?.nombre ?? null,
+          fecha_asignacion: assignment?.fecha_asignacion ?? null,
+        };
+      });
 
       return res.status(200).json(result);
     }
@@ -485,87 +490,110 @@ export default async function handler(req, res) {
 
       if (secErr) throw secErr;
 
-      const result = await Promise.all(
-        sectores.map(async (sec) => {
-          // Get active receta
-          const { data: assignment } = await supabase
-            .schema('siracusa')
-            .from('sector_receta')
-            .select('id_receta, recetas!inner(id, nombre)')
-            .eq('id_sector', sec.id)
-            .eq('activo', true)
-            .maybeSingle();
+      const sectorIds = sectores.map((sec) => sec.id);
 
-          // Get all receta_totals for the assigned receta
-          let receta_totals = [];
-          if (assignment?.id_receta) {
-            const { data: detalles } = await supabase
-              .schema('siracusa')
-              .from('receta_detalle')
-              .select('kilos_plan, fertilizantes!inner(name)')
-              .eq('id_receta', assignment.id_receta);
+      // 1. Active assignments for all sectors (one query)
+      const { data: assignments, error: asgErr } = await supabase
+        .schema('siracusa')
+        .from('sector_receta')
+        .select('id_sector, id_receta, recetas!inner(id, nombre)')
+        .in('id_sector', sectorIds)
+        .eq('activo', true);
+      if (asgErr) throw asgErr;
 
-            // Aggregate by fertilizer
-            const agg = {};
-            for (const d of detalles || []) {
-              const name = d.fertilizantes?.name;
-              if (!name) continue;
-              if (!agg[name]) agg[name] = 0;
-              agg[name] += d.kilos_plan;
+      const assignmentBySector = new Map();
+      const recetaIds = [];
+      for (const a of assignments || []) {
+        assignmentBySector.set(a.id_sector, a);
+        if (a.id_receta) recetaIds.push(a.id_receta);
+      }
+
+      // 2. All detalles for assigned recetas (one query)
+      const detallesByReceta = new Map();
+      if (recetaIds.length) {
+        const { data: detalles, error: detErr } = await supabase
+          .schema('siracusa')
+          .from('receta_detalle')
+          .select('id_receta, kilos_plan, fertilizantes!inner(name)')
+          .in('id_receta', recetaIds);
+        if (detErr) throw detErr;
+        for (const d of detalles || []) {
+          const list = detallesByReceta.get(d.id_receta) || [];
+          list.push(d);
+          detallesByReceta.set(d.id_receta, list);
+        }
+      }
+
+      // 3. Season solicitudes for all sectors (one query)
+      const { data: solicitudes, error: solErr } = await supabase
+        .schema('siracusa')
+        .from('solicitudes_riego')
+        .select('id_sector, fert_sulfato_zn, fert_nitrato_amo, fert_nitrato_ca, fert_cloruro_k, fert_acido_boro, fert_sulfato_mg, fert_fma, fert_urea')
+        .in('id_sector', sectorIds)
+        .eq('active', true)
+        .gte('fecha_riego', seasonStart)
+        .lte('fecha_riego', seasonEnd);
+      if (solErr) throw solErr;
+
+      const solsBySector = new Map();
+      for (const s of solicitudes || []) {
+        const list = solsBySector.get(s.id_sector) || [];
+        list.push(s);
+        solsBySector.set(s.id_sector, list);
+      }
+
+      const FERT_MAP = {
+        fert_sulfato_zn: 'Sulfato Zn',
+        fert_nitrato_amo: 'Nitrato Amonio',
+        fert_nitrato_ca: 'Nitrato Calcio',
+        fert_cloruro_k: 'Cloruro K',
+        fert_acido_boro: 'Acido Borico',
+        fert_sulfato_mg: 'Sulfato Mg',
+        fert_fma: 'FMA',
+        fert_urea: 'Urea',
+      };
+
+      const result = sectores.map((sec) => {
+        const assignment = assignmentBySector.get(sec.id);
+
+        // Aggregate receta totals
+        const agg = {};
+        for (const d of detallesByReceta.get(assignment?.id_receta) || []) {
+          const name = d.fertilizantes?.name;
+          if (!name) continue;
+          if (!agg[name]) agg[name] = 0;
+          agg[name] += d.kilos_plan;
+        }
+        const receta_totals = Object.entries(agg).map(([fert_name, kilos_total]) => ({
+          fert_name,
+          kilos_total,
+        }));
+
+        // Aggregate applied amounts
+        const applied_agg = {};
+        for (const sol of solsBySector.get(sec.id) || []) {
+          for (const [col, name] of Object.entries(FERT_MAP)) {
+            const val = parseFloat(sol[col]) || 0;
+            if (val > 0) {
+              if (!applied_agg[name]) applied_agg[name] = 0;
+              applied_agg[name] += val;
             }
-            receta_totals = Object.entries(agg).map(([fert_name, kilos_total]) => ({
-              fert_name,
-              kilos_total,
-            }));
           }
+        }
+        const applied_totals = Object.entries(applied_agg).map(([fert_name, kilos_aplicados]) => ({
+          fert_name,
+          kilos_aplicados,
+        }));
 
-          // Get applied amounts this season
-          const { data: solicitudes } = await supabase
-            .schema('siracusa')
-            .from('solicitudes_riego')
-            .select('fert_sulfato_zn, fert_nitrato_amo, fert_nitrato_ca, fert_cloruro_k, fert_acido_boro, fert_sulfato_mg, fert_fma, fert_urea')
-            .eq('id_sector', sec.id)
-            .eq('active', true)
-            .gte('fecha_riego', seasonStart)
-            .lte('fecha_riego', seasonEnd);
-
-          const FERT_MAP = {
-            fert_sulfato_zn: 'Sulfato Zn',
-            fert_nitrato_amo: 'Nitrato Amonio',
-            fert_nitrato_ca: 'Nitrato Calcio',
-            fert_cloruro_k: 'Cloruro K',
-            fert_acido_boro: 'Acido Borico',
-            fert_sulfato_mg: 'Sulfato Mg',
-            fert_fma: 'FMA',
-            fert_urea: 'Urea',
-          };
-
-          const applied_agg = {};
-          for (const sol of solicitudes || []) {
-            for (const [col, name] of Object.entries(FERT_MAP)) {
-              const val = parseFloat(sol[col]) || 0;
-              if (val > 0) {
-                if (!applied_agg[name]) applied_agg[name] = 0;
-                applied_agg[name] += val;
-              }
-            }
-          }
-
-          const applied_totals = Object.entries(applied_agg).map(([fert_name, kilos_aplicados]) => ({
-            fert_name,
-            kilos_aplicados,
-          }));
-
-          return {
-            sector_id: sec.id,
-            sector_name: sec.name,
-            receta_id: assignment?.recetas?.id ?? null,
-            receta_nombre: assignment?.recetas?.nombre ?? null,
-            receta_totals,
-            applied_totals,
-          };
-        })
-      );
+        return {
+          sector_id: sec.id,
+          sector_name: sec.name,
+          receta_id: assignment?.recetas?.id ?? null,
+          receta_nombre: assignment?.recetas?.nombre ?? null,
+          receta_totals,
+          applied_totals,
+        };
+      });
 
       return res.status(200).json(result);
     }

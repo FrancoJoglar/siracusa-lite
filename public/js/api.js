@@ -76,7 +76,19 @@ supabaseClient.auth.onAuthStateChange((event) => {
   }
 });
 
-async function api(u,o={}){const r=await fetch(u,{headers:{'Content-Type':'application/json'},...o,body:o.body?JSON.stringify(o.body):undefined});return r.json();}
+async function api(u,o={}){
+  const headers={'Content-Type':'application/json',...(o.headers||{})};
+  if(currentUser?.access_token) headers['Authorization']='Bearer '+currentUser.access_token;
+  const opts={...o,headers,body:o.body?JSON.stringify(o.body):undefined};
+  if(o.signal) opts.signal=o.signal;
+  const r=await fetch(u,opts);
+  const type=r.headers.get('content-type')||'';
+  const payload=type.includes('application/json')?await r.json():await r.text();
+  if(!r.ok){const err=new Error((payload&&payload.error)||('Request failed ('+r.status+')'));err.status=r.status;err.payload=payload;throw err;}
+  return payload;
+}
+function isAbortError(e){return e&&e.name==='AbortError';}
+function apiErrorMessage(e,fallback){return isAbortError(e)?'':(e?.message||fallback);}
 
 function showView(n){document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));document.getElementById('view-'+n).classList.remove('hidden');document.querySelectorAll('.nav-btn').forEach(b=>{b.classList.toggle('bg-green-100',b.dataset.view===n);b.classList.toggle('text-green-700',b.dataset.view===n)});if(n==='database')loadDatabase();if(n==='calendario'&&document.getElementById('cal-equipo').value)loadCalendar();}
 function closeModal(id){document.getElementById(id).classList.add('hidden');}

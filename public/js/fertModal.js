@@ -1,46 +1,39 @@
 // ═══ FERT MODAL ═══
 async function openFertModalByDate(fecha,sectorId){
-  const t0=performance.now();
-  
   const d=new Date(fecha+'T12:00:00');
   const mes=d.getMonth()+1, anio=d.getFullYear();
   const monthStart=fecha.substring(0,7)+'-01';
-  
-  // 1. Load solicitud for this date+sector
-  const solData = await api(`/api/solicitudes?search=true&fecha=${fecha}&id_sector=${sectorId}`);
-  if(!solData){toast('No hay solicitud para '+fecha);return;}
-  
-  fertSolId=solData.id;
+
   const secData=sectores.find(s=>s.id==sectorId);
-  
-  // 2. Load other solicitudes this month (for cumulative calc)
-  const otherSols = await api(`/api/solicitudes?fecha_desde=${monthStart}&fecha_hasta=${fecha}&id_sector=${sectorId}`);
-  
-  // 3. NEW RECETA MODEL: get active assignment + detalles
+  const equipo = equipos.find(e => sectores.some(s => s.id === sectorId && s.id_equipo === e.id));
+
+  // Fire independent requests in parallel: solicitud, month usage, assignment
+  const [solData, otherSols, asigData] = await Promise.all([
+    api(`/api/solicitudes?search=true&fecha=${fecha}&id_sector=${sectorId}`),
+    api(`/api/solicitudes?fecha_desde=${monthStart}&fecha_hasta=${fecha}&id_sector=${sectorId}`),
+    equipo ? api(`/api/recetas?view=asignaciones&id_equipo=${equipo.id}`) : Promise.resolve([]),
+  ]);
+
+  if(!solData){toast('No hay solicitud para '+fecha);return;}
+  fertSolId=solData.id;
+
+  // Receta assignment (from the already-fetched asignaciones)
   let recetaMap = {};
   let recetaNombre = null;
   try {
-    // Find the equipo for this sector
-    const equipo = equipos.find(e => {
-      return sectores.some(s => s.id === sectorId && s.id_equipo === e.id);
-    });
-    if(equipo){
-      const asigData = await api(`/api/recetas?view=asignaciones&id_equipo=${equipo.id}`);
-      const asig = (Array.isArray(asigData) ? asigData : []).find(a => a.sector_id === sectorId);
-      if(asig && asig.receta_id){
-        recetaNombre = asig.receta_nombre;
-        const detalles = await api(`/api/recetas?view=detalle&id_receta=${asig.receta_id}`);
-        // Group by fert_name, sum kilos_plan across months for season total
-        const seasonMap = {};
-        (Array.isArray(detalles) ? detalles : []).forEach(det => {
-          if(!seasonMap[det.fert_name]) seasonMap[det.fert_name] = 0;
-          seasonMap[det.fert_name] += det.kilos_plan || 0;
-        });
-        // Convert to {fert_name: max} format (season total)
-        Object.keys(seasonMap).forEach(fn => {
-          recetaMap[fn] = { max: seasonMap[fn] };
-        });
-      }
+    const asig = (Array.isArray(asigData) ? asigData : []).find(a => a.sector_id === sectorId);
+    if(asig && asig.receta_id){
+      recetaNombre = asig.receta_nombre;
+      const detalles = await api(`/api/recetas?view=detalle&id_receta=${asig.receta_id}`);
+      // Group by fert_name, sum kilos_plan across months for season total
+      const seasonMap = {};
+      (Array.isArray(detalles) ? detalles : []).forEach(det => {
+        if(!seasonMap[det.fert_name]) seasonMap[det.fert_name] = 0;
+        seasonMap[det.fert_name] += det.kilos_plan || 0;
+      });
+      Object.keys(seasonMap).forEach(fn => {
+        recetaMap[fn] = { max: seasonMap[fn] };
+      });
     }
   } catch(e){
     console.warn('Could not load receta assignment:', e);
