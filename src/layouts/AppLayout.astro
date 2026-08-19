@@ -1,0 +1,32 @@
+---
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title}</title>
+  <link rel="stylesheet" href="/tailwind.css">
+  <style>
+    .fade-in{animation:fadeIn .25s ease-in}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .cell-click{cursor:pointer;transition:all .12s}
+    .cell-click:hover{background:#dbeafe!important}
+    .cell-today{box-shadow:inset 0 0 0 2px #2563eb}
+    .cal-scroll::-webkit-scrollbar{height:8px}
+    .cal-scroll::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+    .cal-scroll::-webkit-scrollbar-track{background:#f1f5f9}
+    .over-max{background:#fef2f2!important;color:#dc2626!important}
+    .saldo-ok{color:#16a34a}.saldo-warn{color:#d97706}.saldo-over{color:#dc2626;font-weight:bold}
+  </style>
+  <script is:inline src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <slot />
+</body>
+</html>

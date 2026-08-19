@@ -1,15 +1,22 @@
 {
   "name": "siracusa-lite",
-  "version": "1.0.0",
+  "version": "2.0.0-astro",
   "type": "module",
+  "main": "api/index.js",
   "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
     "build:css": "tailwindcss -i src/input.css -o public/tailwind.css"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.0",
-    "ws": "^8.21.3"
+    "@supabase/supabase-js": "^2.49.0"
   },
   "devDependencies": {
+    "@astrojs/svelte": "^7.0.0",
+    "@astrojs/vercel": "^8.0.0",
+    "astro": "^5.0.0",
+    "svelte": "^5.0.0",
     "@tailwindcss/cli": "^4.3.3",
     "tailwindcss": "^4.3.3"
   }
