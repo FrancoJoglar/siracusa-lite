@@ -2,7 +2,6 @@
   "name": "siracusa-lite",
   "version": "2.0.0-astro",
   "type": "module",
-  "main": "api/index.js",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
