@@ -5,9 +5,12 @@ import { api, isAbortError, FK, FN } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { CalendarSkeleton } from './Skeleton';
 import { FertModal } from './FertModal';
+import { QuickIrrigationModal } from './QuickIrrigationModal';
+import { FertilizerModal } from './FertilizerModal';
+import { Tooltip } from './Tooltip';
 
 interface Equipo { id: number; name: string; }
-interface CalendarioProps { navigateTo: (view: string) => void; }
+interface CalendarioProps { navigateTo: (view: string) => void; onToast: (msg: string) => void; }
 
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -20,7 +23,7 @@ function solDataHasFert(sols: any[]): boolean {
   return sols.some((s: any) => FK.some((k) => (s[k] ?? 0) > 0));
 }
 
-export function Calendario({ navigateTo }: CalendarioProps) {
+export function Calendario({ navigateTo, onToast }: CalendarioProps) {
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [selectedEquipo, setSelectedEquipo] = useState('');
   const [selectedMes, setSelectedMes] = useState(new Date().getMonth() + 1);
@@ -38,6 +41,29 @@ export function Calendario({ navigateTo }: CalendarioProps) {
   // FertModal state
   const [showFertModal, setShowFertModal] = useState(false);
   const [fertModalData, setFertModalData] = useState<{ sectorName: string; fecha: string; sols: any[] } | null>(null);
+
+  // QuickIrrigationModal state
+  const [showQuickIrrigation, setShowQuickIrrigation] = useState(false);
+  const [quickIrrigationData, setQuickIrrigationData] = useState<{
+    sectorId: number;
+    sectorName: string;
+    fecha: string;
+    day: number;
+    existingHrs: number;
+    existingM3: number;
+    hasFert: boolean;
+  } | null>(null);
+
+  // FertilizerModal state
+  const [showFertilizerModal, setShowFertilizerModal] = useState(false);
+  const [fertilizerModalData, setFertilizerModalData] = useState<{
+    sectorId: number;
+    sectorName: string;
+    fecha: string;
+    day: number;
+    existingHrs: number;
+    existingM3: number;
+  } | null>(null);
 
   const gridCache = useRef<Map<string, any[]>>(new Map());
   const abortCtrlRef = useRef<AbortController | null>(null);
@@ -232,7 +258,7 @@ export function Calendario({ navigateTo }: CalendarioProps) {
                 <colgroup>
                   <col style={{ width: '60px' }} />
                   {gridData.map((sec) => (
-                    <col key={sec.id} style={{ width: expandedSector === sec.id ? '456px' : '136px' }} />
+                    <col key={sec.id} style={{ width: expandedSector === sec.id ? '464px' : '144px' }} />
                   ))}
                 </colgroup>
                 <thead>
@@ -266,7 +292,9 @@ export function Calendario({ navigateTo }: CalendarioProps) {
                           <div className="flex h-full">
                             <div className="flex-1 border-r border-blue-100 px-1.5 py-1 text-[10px] bg-blue-50 font-semibold text-blue-700 text-center">Hrs</div>
                             {isExp && FN.map((n) => (
-                              <div key={n} className="w-10 border-r border-blue-100 px-1 py-1 text-[8px] bg-blue-50 font-semibold text-orange-600 text-center" title={n}>{n.substring(0, 3)}</div>
+                              <Tooltip key={n} content={n}>
+                                <div className="w-10 border-r border-blue-100 px-1 py-1 text-[8px] bg-blue-50 font-semibold text-orange-600 text-center cursor-help">{n.substring(0, 3)}</div>
+                              </Tooltip>
                             ))}
                             <div className="w-12 border-r border-blue-100 px-1.5 py-1 text-[10px] bg-blue-50 font-semibold text-blue-700 text-center">M³</div>
                             <div className="w-8 px-1 py-1 text-[10px] bg-blue-50 font-semibold text-blue-700 text-center">🧪</div>
@@ -297,12 +325,25 @@ export function Calendario({ navigateTo }: CalendarioProps) {
                           const has = sols.length > 0;
                           const isExp = expandedSector === sec.id;
 
+                          const openQuickIrrigation = () => {
+                            setQuickIrrigationData({
+                              sectorId: sec.id,
+                              sectorName: sec.name,
+                              fecha: `${selectedAnio}-${String(selectedMes).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+                              day: d,
+                              existingHrs: hrs,
+                              existingM3: m3,
+                              hasFert: solDataHasFert(sols),
+                            });
+                            setShowQuickIrrigation(true);
+                          };
+
                           return (
                             <td key={sec.id} colSpan={getCols(sec)} className="border border-blue-100 p-0">
                               <div className="flex h-full">
-                                {/* Hrs cell */}
+                                {/* Hrs cell - click to open quick irrigation */}
                                 <div className={`flex-1 border-r border-blue-100 px-1.5 py-1 text-center text-xs font-semibold cursor-pointer hover:bg-blue-100 transition-colors ${has ? 'bg-blue-50' : ''} ${isT ? 'bg-blue-100' : ''}`}
-                                  onClick={() => navigateTo('solicitudes')}>
+                                  onClick={openQuickIrrigation}>
                                   {has ? hrs.toFixed(1) : ''}
                                 </div>
                                 {/* Fertilizer cells (expanded only) */}
@@ -320,14 +361,30 @@ export function Calendario({ navigateTo }: CalendarioProps) {
                                 <div className="w-12 border-r border-blue-100 px-1.5 py-1 text-center text-[10px] text-blue-600 font-semibold">
                                   {has && m3 > 0 ? m3.toFixed(0) : ''}
                                 </div>
-                                {/* Fertilizer indicator */}
-                                <div className="w-8 px-1 py-1 text-center cursor-pointer hover:bg-green-50 transition-colors"
-                                  onClick={() => openFertModal(sec.name, d)}>
-                                  {has && (
-                                    <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] ${solDataHasFert(sols) ? 'bg-orange-100 text-orange-600 ring-1 ring-orange-300' : 'bg-green-100 text-green-600'}`}>
-                                      🧪
-                                    </span>
-                                  )}
+                                {/* Fertilizer button - always visible */}
+                                <div className="w-8 px-1 py-1 flex items-center justify-center">
+                                  <button
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-all hover:scale-110"
+                                    style={{
+                                      backgroundColor: solDataHasFert(sols) ? '#fed7aa' : '#dbeafe',
+                                      color: solDataHasFert(sols) ? '#c2410c' : '#1d4ed8',
+                                      border: solDataHasFert(sols) ? '1px solid #fb923c' : '1px solid #93c5fd',
+                                    }}
+                                    title={solDataHasFert(sols) ? 'Ver/Editar fertilizantes' : 'Agregar fertilizantes'}
+                                    onClick={() => {
+                                      setFertilizerModalData({
+                                        sectorId: sec.id,
+                                        sectorName: sec.name,
+                                        fecha: `${selectedAnio}-${String(selectedMes).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+                                        day: d,
+                                        existingHrs: hrs,
+                                        existingM3: m3,
+                                      });
+                                      setShowFertilizerModal(true);
+                                    }}
+                                  >
+                                    🧪
+                                  </button>
                                 </div>
                               </div>
                             </td>
@@ -490,6 +547,69 @@ export function Calendario({ navigateTo }: CalendarioProps) {
           sols={fertModalData.sols}
           fertilizantes={fertilizantes}
           onClose={() => { setShowFertModal(false); setFertModalData(null); }}
+        />
+      )}
+
+      {/* Quick Irrigation Modal */}
+      {showQuickIrrigation && quickIrrigationData && (
+        <QuickIrrigationModal
+          sectorId={quickIrrigationData.sectorId}
+          sectorName={quickIrrigationData.sectorName}
+          fecha={quickIrrigationData.fecha}
+          day={quickIrrigationData.day}
+          existingHrs={quickIrrigationData.existingHrs}
+          existingM3={quickIrrigationData.existingM3}
+          hasFert={quickIrrigationData.hasFert}
+          onClose={() => { setShowQuickIrrigation(false); setQuickIrrigationData(null); }}
+          onSaved={() => {
+            // Refresh grid data
+            gridCache.current.delete(`${selectedEquipo}-${selectedMes}-${selectedAnio}`);
+            const loadRefresh = async () => {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+                const data = await api<any[]>(`/api/grid?id_equipo=${selectedEquipo}&mes=${selectedMes}&anio=${selectedAnio}`, { token });
+                gridCache.current.set(`${selectedEquipo}-${selectedMes}-${selectedAnio}`, data);
+                setGridData(data);
+                computeStats(data);
+              } catch (e) {
+                console.error('Error refreshing:', e);
+              }
+            };
+            loadRefresh();
+          }}
+          onToast={onToast}
+        />
+      )}
+
+      {/* Fertilizer Modal - for adding fertilizers */}
+      {showFertilizerModal && fertilizerModalData && (
+        <FertilizerModal
+          sectorId={fertilizerModalData.sectorId}
+          sectorName={fertilizerModalData.sectorName}
+          fecha={fertilizerModalData.fecha}
+          day={fertilizerModalData.day}
+          existingHrs={fertilizerModalData.existingHrs}
+          existingM3={fertilizerModalData.existingM3}
+          onClose={() => { setShowFertilizerModal(false); setFertilizerModalData(null); }}
+          onSaved={() => {
+            // Refresh grid data
+            gridCache.current.delete(`${selectedEquipo}-${selectedMes}-${selectedAnio}`);
+            const loadRefresh = async () => {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+                const data = await api<any[]>(`/api/grid?id_equipo=${selectedEquipo}&mes=${selectedMes}&anio=${selectedAnio}`, { token });
+                gridCache.current.set(`${selectedEquipo}-${selectedMes}-${selectedAnio}`, data);
+                setGridData(data);
+                computeStats(data);
+              } catch (e) {
+                console.error('Error refreshing:', e);
+              }
+            };
+            loadRefresh();
+          }}
+          onToast={onToast}
         />
       )}
     </div>

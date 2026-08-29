@@ -1,5 +1,5 @@
-export const FK = ['fert_sulfato_zn', 'fert_nitrato_amo', 'fert_nitrato_ca', 'fert_cloruro_k', 'fert_acido_boro', 'fert_sulfato_mg', 'fert_fma', 'fert_urea'] as const;
-export const FN = ['Sulfato Zn', 'Nitrato Amonio', 'Nitrato Calcio', 'Cloruro K', 'Acido Borico', 'Sulfato Mg', 'FMA', 'Urea'] as const;
+export const FK = ['fert_sulfato_zn', 'fert_nitrato_amo', 'fert_nitrato_ca', 'fert_cloruro_k', 'fert_acido_boro', 'fert_sulfato_mg', 'fert_fma', 'fert_urea', 'fert_nitrato_k', 'fert_sulfato_k', 'fert_novatec'] as const;
+export const FN = ['Sulfato Zn', 'Nitrato Amonio', 'Nitrato Calcio', 'Cloruro K', 'Acido Borico', 'Sulfato Mg', 'FMA', 'Urea', 'Nitrato Potasio', 'Sulfato Potasio', 'Novatec'] as const;
 export const DOW = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
 export const SEC_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 

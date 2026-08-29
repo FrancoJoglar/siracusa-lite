@@ -3,19 +3,46 @@
 :root {
   --background: #f8fafc;
   --foreground: #1e293b;
+  --font-roboto: 'Roboto', sans-serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-roboto);
+  --font-roboto: var(--font-roboto);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-roboto);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* Larger font sizes for better readability */
+h1 { font-size: 1.75rem; font-weight: 700; }
+h2 { font-size: 1.5rem; font-weight: 600; }
+h3 { font-size: 1.125rem; font-weight: 600; }
+
+/* Form elements */
+input, select, textarea {
+  font-size: 15px;
+}
+
+/* Table styles */
+table {
+  font-size: 14px;
+}
+
+th {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+td {
+  font-size: 14px;
 }
 
 /* Calendar specific styles */

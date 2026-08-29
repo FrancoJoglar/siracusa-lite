@@ -5,6 +5,8 @@ import { Calendario } from '@/components/Calendario';
 import { Login } from '@/components/Login';
 import { Solicitudes } from '@/components/Solicitudes';
 import { Recetas } from '@/components/Recetas';
+import { Asignaciones } from '@/components/Asignaciones';
+import { ConsumptionTable } from '@/components/ConsumptionTable';
 
 export default function Home() {
   const [view, setView] = useState('calendario');
@@ -50,9 +52,11 @@ export default function Home() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {view === 'calendario' && <Calendario navigateTo={navigateTo} />}
+      {view === 'calendario' && <Calendario navigateTo={navigateTo} onToast={showToast} />}
       {view === 'solicitudes' && <Solicitudes onToast={showToast} />}
       {view === 'recetas' && <Recetas onToast={showToast} />}
+      {view === 'asignaciones' && <Asignaciones onToast={showToast} />}
+      {view === 'consumo' && <ConsumptionTable onToast={showToast} />}
 
       {/* Toast notification */}
       {toast && (
